@@ -55,3 +55,6 @@ This is what the local HA calendar looks like once you have added the cycle days
 Sample calendar event when you click on an entry.
 
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/calendar_event.JPG "Sample calendar entry")
+
+## Conclusion
+This is my first python program, so I am positive that I was a lot less efficient than I could have been. It works, and so I'm putting it out there for others. If you have suggestions for improving the code and/or want new features, please create a PR, and I'll be happy to do my best. I enjoy this even if it can be a bit frustrating at times.
