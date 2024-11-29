@@ -39,11 +39,18 @@ This is the main input/status screen. From here, you can add and delete non-scho
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/main_screen.JPG "Main screen")
 
 ## Cycle Days
-This is where you add non-school days (in-service, snow days, etc.). Any manually added days will be added to the holidays in your selected region.
+This is where you add non-school days (in-service, snow days, etc.). Any manually added days will be added to the holidays in your selected region. When running the calendar cycle days (to add the dates to your calendar), you can select the date range for it to run. This allows you to start from today or yesterday, for example, when you have to rerun the calendar due to a snow day, etc.
 
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/cycle_days.JPG "Cycle Days")
 
 ## Holidays
 
+## Calendar
+This is what the local HA calendar looks like once you have added the cycle days.
+
+![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/calendar.JPG "Full calendar")
+
 ## Example calendar event
+Sample calendar event when you click on an entry.
+
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/calendar_event.JPG "Sample calendar entry")
