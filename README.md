@@ -40,6 +40,7 @@ This is the main input/status screen. From here, you can add and delete non-scho
 
 ## Cycle Days
 This is where you add non-school days (in-service, snow days, etc.). Any manually added days will be added to the holidays in your selected region.
+
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/cycle_days.JPG "Cycle Days")
 
 ## Holidays
