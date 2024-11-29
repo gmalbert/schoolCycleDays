@@ -44,6 +44,7 @@ This is where you add non-school days (in-service, snow days, etc.). Any manuall
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/cycle_days.JPG "Cycle Days")
 
 ## Holidays
+This app incorporates the holidays python import. The app can be configured as described in its [documentation](https://pypi.org/project/holidays/ "Python Holidays documentation"). You can either use the holiday list as specified or delete the holidays and add the non-school days manually.
 
 ## Calendar
 This is what the local HA calendar looks like once you have added the cycle days.
