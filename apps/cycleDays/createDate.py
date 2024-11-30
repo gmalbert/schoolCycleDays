@@ -9,6 +9,9 @@
 # Date input to pick a day to add to the list of non-school days.
 #  	added_date: input_datetime.add_non_school_day
 
+# List of all  holidays
+#	cycle_day_holidays: input_text.cycle_day_holidays
+
 # Date to begin the cycle days on the calendar.
 #  	start_date : input_datetime.cycle_start_day
 
