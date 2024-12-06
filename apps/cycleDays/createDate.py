@@ -377,7 +377,8 @@ class CycleDays(hass.Hass):
 				print(start_date.strftime('%m/%d/%Y') + ' is a weekend day.')
 			
 			start_date += delta
-        
+            
+            # start the day over at 1 so there's a 5-day cycle
 			if day_number > 5:
 				day_number = 1
 
