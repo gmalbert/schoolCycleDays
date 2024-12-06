@@ -51,6 +51,9 @@ This is where you add non-school days (in-service, snow days, etc.). Any manuall
 ## Holidays
 This app incorporates the ```holidays``` python import. The app can be configured as described in its [documentation](https://pypi.org/project/holidays/ "Python Holidays documentation"). You can either use the holiday list as specified or delete the holidays and add the non-school days manually. Once you have set up your preferred list of holidays, you need to run the task to add the holidays to the list of non-school days. 
 
+## Deleting calendar events
+HA does not currently have a way to delete individual events through an automation, but I'm hoping that will change in the near future. In the meantime, the ```Delete Calendar Events``` button physically deletes the .ics file from the ```.storage``` folder. HA keeps a pointer to that calendar, and the .ics will be recreated upon adding at least one event.
+
 ## Calendar
 This is what the local HA calendar looks like once you have added the cycle days.
 
