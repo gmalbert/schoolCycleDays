@@ -83,7 +83,6 @@ class CycleDays(hass.Hass):
 		headers = {"Authorization": 'Bearer ' + self.args["bearer_token"], "content-type": "application/json" }
 		
 		calendar_path = self.args["calendar_path"]
-		calendar_uid = self.args["calendar_uid"]
 		calendar_name = self.args["calendar_name"]
 		
 		# concatenate the path with the name of the calendar, and then append the .ics extension
