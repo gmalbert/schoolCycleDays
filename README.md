@@ -31,7 +31,9 @@ Each of these helper entities are explained in detail in the comments at the top
 18. button_entity_to_delete_holidays: input_button.delete_holidays
 19. system_message: input_text.system_message
 
-If you change any of the names (the text above before the :), you'll need to replace them in the code. I did my best not to hard code anything, and instead use ```self.args["INPUT NAME"]```.
+If you change any of the names (the text above before the :), you'll need to replace them in the code. I did my best not to hard code anything, and instead use ```self.args["INPUT NAME"]```. In addition, you will need to create a Bearer Token to access the REST API. Instructions for creation are provided [here](https://www.home-assistant.io/docs/authentication/ "Authentication"). <b>As a warning, you must put the word ```Bearer``` in front of the created token to designate it as a bearer token.</b>
+
+I put the file path for the ```.ics``` file as part of my ```secrets.yaml``` file, but you can just add it directly into ```apps.yaml```. The same is true for the ```Bearer``` token as described above.
 
 ## Main screen
 This is the main input/status screen. From here, you can add and delete non-school days, add and delete holidays, and finally, add those cycle days and their associated specials to your local HA calendar. 
