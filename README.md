@@ -1,7 +1,7 @@
 # School Cycle Days
 Populate local Home Assistant calendar with school "specials" based on cycle days using Appdaemon
 
-This app provides a way to keep track of school specials based on cycle days rather than days of the week. The app is based on a five cycle day system where school "specials" (art, music, library, etc.) run on the same cycle day but not the same day of the week each week. Each time there's a snow day or in-service day, etc., the cycle days stop, and then they start back up when school is back in session. As a parent, this has become very difficult to manage. 
+This app provides a way to keep track of school specials based on cycle days rather than days of the week. The app is based on a five cycle day system where school "specials" (art, music, library, etc.) run on the same cycle day but not the same day of the week. Each time there's a snow day or in-service day, etc., the cycle days stop, and then they start back up when school is back in session. This has become very difficult to manage. 
 
 This app relies heavily on Home Assistant (HA) created entities, and using the HA interface to trigger different tasks. Below are the helpers that need to be created. Because HA does not (yet) have a way to programmatically delete events, the delete events button deletes the physical calendar file (.ics), and then it's recreated when adding a new calendar entry.
 
@@ -41,7 +41,7 @@ This is the main input/status screen. From here, you can add and delete non-scho
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/main_screen.JPG "Main screen")
 
 
-Once you add holidays and non-school days, you can continue to add non-school days or delete entries you already added.
+Once you add holidays and non-school days, this is the interface you can continue to add non-school days or delete entries you already added.
 
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/main_screen_with_entries.JPG "Main screen with entries")
 
