@@ -29,7 +29,8 @@ Each of these helper entities are explained in detail in the comments at the top
 16. button_entity_to_delete_non_school_day: input_button.delete_non_school_day
 17. button_entity_to_delete_calendar_events: input_button.delete_calendar_events
 18. button_entity_to_delete_holidays: input_button.delete_holidays
-19. system_message: input_text.system_message
+19. button_entity_to_add_dates_from_other_calendar: input_button.add_dates_from_other_calendar
+20. system_message: input_text.system_message
 
 If you change any of the names (the text above before the :), you'll need to replace them in the code. I did my best not to hard code anything, and instead use ```self.args["INPUT NAME"]```. In addition, you will need to create a Bearer Token to access the REST API. Instructions for creation are provided [here](https://www.home-assistant.io/docs/authentication/ "Authentication"). <b>As a warning, you must put the word ```Bearer``` in front of the created token to designate it as a bearer token.</b>
 
