@@ -77,11 +77,11 @@ class CycleDays(hass.Hass):
 		
 		global url
 		url = self.args["create_event_url"]
-		#url = "http://192.168.1.140:8123/api/services/calendar/create_event"
 		
 		global headers
 		headers = {"Authorization": 'Bearer ' + self.args["bearer_token"], "content-type": "application/json" }
 		
+		global calendar_path
 		calendar_path = self.args["calendar_path"]
 		calendar_name = self.args["calendar_name"]
 		
@@ -111,6 +111,14 @@ class CycleDays(hass.Hass):
 		
 		self.button_entity = self.get_entity(self.args["button_entity_to_delete_holidays"])
 		self.handle = self.button_entity.listen_state(self.deleteHolidays)
+        
+		self.button_entity = self.get_entity(self.args["button_entity_to_add_dates_from_other_calendar"])
+		self.handle = self.button_entity.listen_state(self.addOtherCalendarDates)
+		
+		self.button_entity = self.get_entity(self.args["button_entity_to_refresh_calendar_list"])
+		self.handle = self.button_entity.listen_state(self.refreshCalendarList)
+
+
 
 	def deleteDates(self, start_date, end_date, old, new, kwargs):
 		
@@ -127,6 +135,62 @@ class CycleDays(hass.Hass):
 		except FileNotFoundError:
 			print(f"File '{calendar_path_to_file}' not found.")
 
+	
+		
+	
+	def refreshCalendarList(self, start_date, end_date, old, new, kwargs):
+		
+		dir_list = os.listdir(calendar_path)
+		
+		calendar_list_filenames = []
+		calendar_list_friendly_names = []
+		
+		for calendar in dir_list:
+			if calendar.endswith(".ics"):
+				if calendar != "local_todo.tasks.ics":
+					calendar_list_filenames.append(calendar)
+					print(calendar)
+					
+					characters_to_remove = ["local_calendar.", ".ics"]
+						
+					for character in characters_to_remove:
+						calendar = calendar.replace(character, '')
+					calendar = calendar.replace("_"," ")
+					calendar_list_friendly_names.append(calendar.title())
+					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
+					print(calendar.title())
+
+		
+		global calendar_list_for_input_select
+		calendar_list_for_input_select = dict(zip(calendar_list_filenames, calendar_list_friendly_names))
+		#print(calendar_list_for_input_select)
+		
+		#### issue with sorted lists so school and test are off. 
+		### format the filenames to display in the input select
+		### then concatenate the friendly name with the rest of the filename for processing
+		
+		
+		print(calendar_list_filenames)
+		print(calendar_list_friendly_names)
+		print(calendar_list_for_input_select)
+		
+		self.call_service("input_select/set_options", entity_id = "input_select.calendar_list", options = calendar_list_friendly_names)
+		
+		#print("Test")
+    
+	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
+		#print("test")
+		#non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
+		# get the date from the drop down that was passed
+		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
+		print(calendar_friendly_name)
+		# find the calendar in the list (the index)
+	
+		print(calendar_list_for_input_select)
+		#calendar_friendly_name_index = non_school_days.index(calendar_friendly_name)
+
+		#Delete the passed date from the list
+		#del non_school_days[date_to_delete_index]
 	
 	def addNonSchoolday(self, start_date, end_date, old, new, kwargs):
 		
@@ -158,8 +222,10 @@ class CycleDays(hass.Hass):
 
 		# check to see if the date was already entered
 		if already_entered <=0:
+			
 			non_school_days.append(addedDay)
 			print(addedDay + ' added.')
+			
 			self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 			
 			entity = self.args["system_message"]
@@ -187,7 +253,7 @@ class CycleDays(hass.Hass):
 				
 				non_school_days.sort(key=lambda date: datetime.strptime(date, "%m/%d/%Y"))
 			
-# Sort the list in-place
+			# Sort the list in-place
 			
 			entity = self.args["non_school_days"]
 			
@@ -376,8 +442,7 @@ class CycleDays(hass.Hass):
 				print(start_date.strftime('%m/%d/%Y') + ' is a weekend day.')
 			
 			start_date += delta
-            
-            # start the day over at 1 so there's a 5-day cycle
+        
 			if day_number > 5:
 				day_number = 1
 
