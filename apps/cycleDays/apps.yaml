@@ -29,4 +29,5 @@ printDate:
   button_entity_to_refresh_calendar_list: input_button.refresh_calendar_list
   system_message: input_text.system_message
   create_event_url: !secret create_event_url
+  calendar_event_url: !secret calendar_event_url
   calendar_list: input_select.calendar_list

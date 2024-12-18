@@ -69,7 +69,9 @@ import json
 import holidays
 import os
 import time
-
+import icalendar
+from pathlib import Path
+import io
 
 class CycleDays(hass.Hass):
 	
@@ -142,14 +144,14 @@ class CycleDays(hass.Hass):
 		
 		dir_list = os.listdir(calendar_path)
 		
-		calendar_list_filenames = []
+		#calendar_list_filenames = []
 		calendar_list_friendly_names = []
 		
 		for calendar in dir_list:
 			if calendar.endswith(".ics"):
 				if calendar != "local_todo.tasks.ics":
-					calendar_list_filenames.append(calendar)
-					print(calendar)
+					#calendar_list_filenames.append(calendar)
+					#print(calendar)
 					
 					characters_to_remove = ["local_calendar.", ".ics"]
 						
@@ -160,33 +162,72 @@ class CycleDays(hass.Hass):
 					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
 					print(calendar.title())
 
-		
-		global calendar_list_for_input_select
-		calendar_list_for_input_select = dict(zip(calendar_list_filenames, calendar_list_friendly_names))
-		#print(calendar_list_for_input_select)
-		
-		#### issue with sorted lists so school and test are off. 
-		### format the filenames to display in the input select
-		### then concatenate the friendly name with the rest of the filename for processing
-		
-		
-		print(calendar_list_filenames)
-		print(calendar_list_friendly_names)
-		print(calendar_list_for_input_select)
+
 		
 		self.call_service("input_select/set_options", entity_id = "input_select.calendar_list", options = calendar_list_friendly_names)
 		
 		#print("Test")
     
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
-		#print("test")
-		#non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
-		# get the date from the drop down that was passed
+
 		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
-		print(calendar_friendly_name)
+		#print(calendar_friendly_name)
 		# find the calendar in the list (the index)
-	
-		print(calendar_list_for_input_select)
+		characters_to_remove = ["[", "]","'"]
+						
+		for character in characters_to_remove:
+			calendar_friendly_name = str(calendar_friendly_name).replace(character, '')
+				
+		calendar_friendly_name = calendar_friendly_name.replace(" ","_")
+			
+		calendar_technical_name = "local_calendar." + str(calendar_friendly_name).lower() + ".ics"
+		
+		# Run this through the HA REST API
+		#data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number), 'description': cycle_days[day_number-1]}
+		#url = [self.get_state(self.args["calendar_event_url"])]
+		#url = 'http://192.168.1.140:8123/api/calendars/'
+		#url = str(url) + 'calendar.' + calendar_friendly_name.lower() + '?return_response=true&start=2024-08-01&end=2025-06-30'
+		#print(url)
+		
+		#self.call_service("calendar/get_events", entity_id = 'calendar.' + calendar_friendly_name.lower(), params = { 'start_date_time': '2024-08-01 00:00:00', 'end_date_time': '2025-06-30 00:00:00'}, return_response=True)
+		
+		#data = { 'start': '2024-08-01', 'end': '2025-06-30' }
+		#return
+		#print(url)
+		#print(data)
+		#print(headers)
+		
+		# Run this through the HA REST API
+		#response = requests.get(f'{url}', headers=headers)
+		
+		#print(response)
+		
+		
+		#ics_path = Path("path/to/your/calendar.ics")
+		#print(global.calendar_path_to_file)
+		#return
+		calendar_path_to_file = Path("/homeassistant/.storage/local_calendar.bow_school_calendar.ics")
+		
+		
+		### use calendar_technical_name to get path above
+		### limit events to only "no school" events
+		### figure out how to limit events by date
+		
+		with calendar_path_to_file.open() as f:
+			calendar = icalendar.Calendar.from_ical(f.read())
+
+		for event in calendar.walk('VEVENT'):
+			summary = event.get('SUMMARY')
+			start = event.get('DTSTART')
+			end = event.get('DTEND')
+
+			print(f"Event: {summary}")
+			print(f"Start: {start}")
+			print(f"End: {end}")
+			print("-" * 20)
+		#response = requests.get(f'{url}', headers=headers, json=data)
+		#print(calendar_technical_name)
+		#print(calendar_list_for_input_select)
 		#calendar_friendly_name_index = non_school_days.index(calendar_friendly_name)
 
 		#Delete the passed date from the list
