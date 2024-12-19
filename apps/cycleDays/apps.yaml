@@ -14,6 +14,7 @@ printDate:
   cycle_day_4: input_text.cycle_day_4
   cycle_day_5: input_text.cycle_day_5
   day_number: input_number.cycle_day_restart_day
+  
   bearer_token: !secret bearer_token
   calendar_name: "calendar.test"
   calendar_path: !secret calendar_path
@@ -24,5 +25,9 @@ printDate:
   button_entity_to_delete_non_school_day: input_button.delete_non_school_day
   button_entity_to_delete_calendar_events: input_button.delete_calendar_events
   button_entity_to_delete_holidays: input_button.delete_holidays
+  button_entity_to_add_dates_from_other_calendar: input_button.add_dates_from_other_calendar
+  button_entity_to_refresh_calendar_list: input_button.refresh_calendar_list
   system_message: input_text.system_message
   create_event_url: !secret create_event_url
+  calendar_event_url: !secret calendar_event_url
+  calendar_list: input_select.calendar_list
