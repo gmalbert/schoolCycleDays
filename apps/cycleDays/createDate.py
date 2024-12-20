@@ -171,7 +171,6 @@ class CycleDays(hass.Hass):
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
 
 		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
-		#print(calendar_friendly_name)
 		# find the calendar in the list (the index)
 		characters_to_remove = ["[", "]","'"]
 						
@@ -182,53 +181,21 @@ class CycleDays(hass.Hass):
 			
 		calendar_technical_name = "local_calendar." + str(calendar_friendly_name).lower() + ".ics"
 		
-		# Run this through the HA REST API
-		#data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number), 'description': cycle_days[day_number-1]}
-		#url = [self.get_state(self.args["calendar_event_url"])]
-		#url = 'http://192.168.1.140:8123/api/calendars/'
-		#url = str(url) + 'calendar.' + calendar_friendly_name.lower() + '?return_response=true&start=2024-08-01&end=2025-06-30'
-		#print(url)
 		
-		#self.call_service("calendar/get_events", entity_id = 'calendar.' + calendar_friendly_name.lower(), params = { 'start_date_time': '2024-08-01 00:00:00', 'end_date_time': '2025-06-30 00:00:00'}, return_response=True)
+		calendar_path = self.args["calendar_path"]
+		calendar_path = calendar_path + calendar_technical_name
+		calendar_path_to_file = Path(calendar_path)
 		
-		#data = { 'start': '2024-08-01', 'end': '2025-06-30' }
-		#return
-		#print(url)
-		#print(data)
-		#print(headers)
-		
-		# Run this through the HA REST API
-		#response = requests.get(f'{url}', headers=headers)
-		
-		#print(response)
-		
-		
-		#ics_path = Path("path/to/your/calendar.ics")
-		#print(global.calendar_path_to_file)
-		#return
-		calendar_path_to_file = Path("/homeassistant/.storage/local_calendar.bow_school_calendar.ics")
-		
-		
-		### use calendar_technical_name to get path above
-		### limit events to only "no school" events
-		### figure out how to limit events by date
 		
 		# get the two date inputs for the start and end date
 		start_date = self.get_state(self.args["start_date"])
 		end_date =  self.get_state(self.args["end_date"])
-		#print(start_date)
-		#print(end_date)
 	
 		# Get the formatted start and end dates
 		start_date = datetime.strptime(start_date, '%Y-%m-%d')
 		end_date = datetime.strptime(end_date, '%Y-%m-%d')
 		
-		#print(start_date.dt)
-		#return
-		#print(start_date)
-		#print(end_date)
-		#return
-		
+	
 		with calendar_path_to_file.open() as f:
 			calendar = icalendar.Calendar.from_ical(f.read())
 
@@ -238,26 +205,36 @@ class CycleDays(hass.Hass):
 			end = event.get('DTEND')
 			
 			if str(summary).find("No School") >0:
-			#if start.dt >= start_date and start.dt <= end_date:
-				print(f"Event: {summary}")
-				print(f"Start: {start}")
-				print(f"New Format: { start.dt }")
-				cleaner = datetime.strftime(start.dt, '%Y-%m-%d')
-				print(f"Cleaner: { cleaner } ")
-				print(f"Cleaner type: { type(cleaner) } ")
-				cleaner_date_format = datetime.strptime(cleaner, '%Y-%m-%d')
-				print(f"Cleaner date format: { cleaner_date_format } ")
-				print(f"Type of cleaner date format: { type(cleaner_date_format) } ")
-				print(f"Type: { type(start) }")
-				print(f"End: {end}")
-				print("-" * 20)
-		#response = requests.get(f'{url}', headers=headers, json=data)
-		#print(calendar_technical_name)
-		#print(calendar_list_for_input_select)
-		#calendar_friendly_name_index = non_school_days.index(calendar_friendly_name)
+				
+				event_start_date_as_string = datetime.strftime(start.dt, '%Y-%m-%d')
+				event_start_date = datetime.strptime(event_start_date_as_string, '%Y-%m-%d')
+				
+				event_end_date_as_string = datetime.strftime(end.dt, '%Y-%m-%d')
+				event_end_date = datetime.strptime(event_end_date_as_string, '%Y-%m-%d')
+				
+				if event_start_date >= start_date and event_start_date <= end_date:
+				
+					print(f"Event Start date (cleaned) {event_start_date}")
+					print(f"Event start date as string: {event_start_date_as_string }")
+					print(f"Event: {summary}")
+					print(f"Start: {start}")
+					print(f"End: {end}")
+					
+					dateDifference = (event_end_date - event_start_date).days
+					print(dateDifference)
+					print(type(dateDifference))
 
-		#Delete the passed date from the list
-		#del non_school_days[date_to_delete_index]
+					
+					print("-" * 20)
+					#start_date = event_start_date
+					#end_date = event_end_date
+					delta = timedelta(days=1)
+
+					#### add dates to initial start date
+					
+					for i in range (1,dateDifference):
+						print(event_start_date) + i
+
 	
 	def addNonSchoolday(self, start_date, end_date, old, new, kwargs):
 		
