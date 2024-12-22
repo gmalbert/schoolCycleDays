@@ -37,6 +37,8 @@ If you change any of the names (the text above before the :), you'll need to rep
 
 I put the file path for the ```.ics``` file as part of my ```secrets.yaml``` file, but you can just add it directly into ```apps.yaml```. The same is true for the ```Bearer``` token as described above.
 
+You can add the code from ```school_cycle_days_dashboard.yml``` to make a separate dashboard for this app. This file closely follows the pictures below.
+
 ## Main screen
 This is the main input/status screen. From here, you can add and delete non-school days, add and delete holidays, and finally, add those cycle days and their associated specials to your local HA calendar. 
 
@@ -51,6 +53,11 @@ Once you add holidays and non-school days, this is the interface you can continu
 This is where you add non-school days (in-service, snow days, etc.). Any manually added days will be added to the holidays in your selected region. When running the calendar cycle days (to add the dates to your calendar), you can select the date range for it to run. This allows you to start from today or yesterday, for example, when you have to rerun the calendar due to a snow day, etc.
 
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/cycle_days.JPG "Cycle Days")
+
+## Adding events from another calendar
+Sometimes schools create their own calendars which can be exported into ```.ics``` format. In that case, you need to add the calendar to HA first and use the upload function. The app then allows you to select that calendar from a dropdown and add entries from the school's ```.ics``` file into the non-school days. This function searches for "No School". Other entries (concerts, field day, etc.) are not included as part of the pull from the ```.ics``` file. 
+
+To accomplish the pull since AppDaemon does not yet allow receiving return responses from service calls (like a list of calendar events), I used the ```icalendar``` library to read through the ```.ics``` file, parse the data, and then add the dates from that calendar to the non-school days already in place. The app checks to see if a date has already been added in order to avoid duplication. You can delete non-school day entries from there.
 
 ## Holidays
 This app incorporates the ```holidays``` python import. The app can be configured as described in its [documentation](https://pypi.org/project/holidays/ "Python Holidays documentation"). You can either use the holiday list as specified or delete the holidays and add the non-school days manually. Once you have set up your preferred list of holidays, you need to run the task to add the holidays to the list of non-school days. 
