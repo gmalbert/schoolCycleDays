@@ -91,6 +91,26 @@ class CycleDays(hass.Hass):
 		global calendar_path_to_file
 		calendar_path_to_file = calendar_path + "local_" + calendar_name + ".ics"
 		
+		
+		# load the list of calendars when the app reloads
+		dir_list = os.listdir(calendar_path)
+		calendar_list_friendly_names = []
+		
+		for calendar in dir_list:
+			if calendar.endswith(".ics"):
+				if calendar != "local_todo.tasks.ics":
+					
+					characters_to_remove = ["local_calendar.", ".ics"]
+						
+					for character in characters_to_remove:
+						calendar = calendar.replace(character, '')
+					calendar = calendar.replace("_"," ")
+					calendar_list_friendly_names.append(calendar.title())
+					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
+				
+		# set the system message back to blank.
+		self.set_state(self.args["system_message"], state = "" )
+		
 		# Listening for button entity pushes
 		
 		self.button_entity = self.get_entity(self.args["button_entity_for_adding_dates"])
@@ -144,14 +164,11 @@ class CycleDays(hass.Hass):
 		
 		dir_list = os.listdir(calendar_path)
 		
-		#calendar_list_filenames = []
 		calendar_list_friendly_names = []
 		
 		for calendar in dir_list:
 			if calendar.endswith(".ics"):
 				if calendar != "local_todo.tasks.ics":
-					#calendar_list_filenames.append(calendar)
-					#print(calendar)
 					
 					characters_to_remove = ["local_calendar.", ".ics"]
 						
@@ -171,7 +188,7 @@ class CycleDays(hass.Hass):
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
 
 		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
-		#print(calendar_friendly_name)
+		
 		# find the calendar in the list (the index)
 		characters_to_remove = ["[", "]","'"]
 						
@@ -182,57 +199,89 @@ class CycleDays(hass.Hass):
 			
 		calendar_technical_name = "local_calendar." + str(calendar_friendly_name).lower() + ".ics"
 		
-		# Run this through the HA REST API
-		#data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number), 'description': cycle_days[day_number-1]}
-		#url = [self.get_state(self.args["calendar_event_url"])]
-		#url = 'http://192.168.1.140:8123/api/calendars/'
-		#url = str(url) + 'calendar.' + calendar_friendly_name.lower() + '?return_response=true&start=2024-08-01&end=2025-06-30'
-		#print(url)
 		
-		#self.call_service("calendar/get_events", entity_id = 'calendar.' + calendar_friendly_name.lower(), params = { 'start_date_time': '2024-08-01 00:00:00', 'end_date_time': '2025-06-30 00:00:00'}, return_response=True)
-		
-		#data = { 'start': '2024-08-01', 'end': '2025-06-30' }
-		#return
-		#print(url)
-		#print(data)
-		#print(headers)
-		
-		# Run this through the HA REST API
-		#response = requests.get(f'{url}', headers=headers)
-		
-		#print(response)
+		calendar_path = self.args["calendar_path"]
+		calendar_path = calendar_path + calendar_technical_name
+		calendar_path_to_file = Path(calendar_path)
 		
 		
-		#ics_path = Path("path/to/your/calendar.ics")
-		#print(global.calendar_path_to_file)
-		#return
-		calendar_path_to_file = Path("/homeassistant/.storage/local_calendar.bow_school_calendar.ics")
+		# get the two date inputs for the start and end date
+		start_date = self.get_state(self.args["start_date"])
+		end_date =  self.get_state(self.args["end_date"])
+	
+		# Get the formatted start and end dates
+		start_date = datetime.strptime(start_date, '%Y-%m-%d')
+		end_date = datetime.strptime(end_date, '%Y-%m-%d')
 		
+		event_date_list = []
 		
-		### use calendar_technical_name to get path above
-		### limit events to only "no school" events
-		### figure out how to limit events by date
+		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
 		
+		# Deal with the "None" or empty strings
+		if non_school_days[0] == "[]" or  non_school_days[0] =="" or len(non_school_days) == 0:
+			non_school_days = ""
+		
+		characters_to_remove = ["[", "]", "'"]
+						
+		for character in characters_to_remove:
+			non_school_days = str(non_school_days).replace(character, '')
+		
+		# open an icalendar file to read events
 		with calendar_path_to_file.open() as f:
 			calendar = icalendar.Calendar.from_ical(f.read())
 
+		# return calendar events
 		for event in calendar.walk('VEVENT'):
 			summary = event.get('SUMMARY')
 			start = event.get('DTSTART')
 			end = event.get('DTEND')
+			
+			# only pull the events where "no school" is listed in the summary.
+			
+			if str(summary).find("No School") >0:
+				
+				event_start_date_as_string = datetime.strftime(start.dt, '%Y-%m-%d')
+				event_start_date = datetime.strptime(event_start_date_as_string, '%Y-%m-%d')
+				
+				event_end_date_as_string = datetime.strftime(end.dt, '%Y-%m-%d')
+				event_end_date = datetime.strptime(event_end_date_as_string, '%Y-%m-%d')
+				
+				# get the date difference to figure out the length of the for loop
+				if event_start_date >= start_date and event_start_date <= end_date:
+							
+					dateDifference = (event_end_date - event_start_date).days
+					delta = timedelta(days=1)
 
-			print(f"Event: {summary}")
-			print(f"Start: {start}")
-			print(f"End: {end}")
-			print("-" * 20)
-		#response = requests.get(f'{url}', headers=headers, json=data)
-		#print(calendar_technical_name)
-		#print(calendar_list_for_input_select)
-		#calendar_friendly_name_index = non_school_days.index(calendar_friendly_name)
-
-		#Delete the passed date from the list
-		#del non_school_days[date_to_delete_index]
+					# when there is a date range, add loop through the range to add all of the dates
+					
+					for i in range (dateDifference):
+						
+						new_date = event_start_date + timedelta(days=i)
+							
+						formatted_date = datetime.strftime(new_date, '%m/%d/%Y')
 	
+						# don't add a non school day if it's already in the list
+						if formatted_date not in non_school_days:
+							event_date_list.append(formatted_date)
+			
+		# now change it back to a comma-delimited list
+		non_school_days = non_school_days.split(", ")
+		
+		# Add non school days from calendar to manually entered non-school days
+		non_school_days.extend(event_date_list)
+		
+		entity = self.args["non_school_days"]
+			
+		# set the attribute to be all of the current non-school days
+		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
+			
+		# Populate the dropdown to be able to delete already entered dates
+		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+
+		# Set a system message for how many non-school days have been added.
+		self.set_state(self.args["system_message"], state = str(len(event_date_list)) + ' non-school days have been added from ' + calendar_friendly_name + '.')
+
+						
 	def addNonSchoolday(self, start_date, end_date, old, new, kwargs):
 		
 		entity = self.args["system_message"]
@@ -258,8 +307,6 @@ class CycleDays(hass.Hass):
 		non_school_days = list(non_school_days)
 		
 		already_entered = str(non_school_days).find(addedDay)
-
-		#entity = "input_text.non_school_days"
 
 		# check to see if the date was already entered
 		if already_entered <=0:
