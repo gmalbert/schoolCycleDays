@@ -91,6 +91,26 @@ class CycleDays(hass.Hass):
 		global calendar_path_to_file
 		calendar_path_to_file = calendar_path + "local_" + calendar_name + ".ics"
 		
+		
+		# load the list of calendars when the app reloads
+		dir_list = os.listdir(calendar_path)
+		calendar_list_friendly_names = []
+		
+		for calendar in dir_list:
+			if calendar.endswith(".ics"):
+				if calendar != "local_todo.tasks.ics":
+					
+					characters_to_remove = ["local_calendar.", ".ics"]
+						
+					for character in characters_to_remove:
+						calendar = calendar.replace(character, '')
+					calendar = calendar.replace("_"," ")
+					calendar_list_friendly_names.append(calendar.title())
+					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
+				
+		# set the system message back to blank.
+		self.set_state(self.args["system_message"], state = "" )
+		
 		# Listening for button entity pushes
 		
 		self.button_entity = self.get_entity(self.args["button_entity_for_adding_dates"])
@@ -144,14 +164,11 @@ class CycleDays(hass.Hass):
 		
 		dir_list = os.listdir(calendar_path)
 		
-		#calendar_list_filenames = []
 		calendar_list_friendly_names = []
 		
 		for calendar in dir_list:
 			if calendar.endswith(".ics"):
 				if calendar != "local_todo.tasks.ics":
-					#calendar_list_filenames.append(calendar)
-					#print(calendar)
 					
 					characters_to_remove = ["local_calendar.", ".ics"]
 						
@@ -171,6 +188,7 @@ class CycleDays(hass.Hass):
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
 
 		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
+		
 		# find the calendar in the list (the index)
 		characters_to_remove = ["[", "]","'"]
 						
@@ -195,14 +213,30 @@ class CycleDays(hass.Hass):
 		start_date = datetime.strptime(start_date, '%Y-%m-%d')
 		end_date = datetime.strptime(end_date, '%Y-%m-%d')
 		
-	
+		event_date_list = []
+		
+		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
+		
+		# Deal with the "None" or empty strings
+		if non_school_days[0] == "[]" or  non_school_days[0] =="" or len(non_school_days) == 0:
+			non_school_days = ""
+		
+		characters_to_remove = ["[", "]", "'"]
+						
+		for character in characters_to_remove:
+			non_school_days = str(non_school_days).replace(character, '')
+		
+		# open an icalendar file to read events
 		with calendar_path_to_file.open() as f:
 			calendar = icalendar.Calendar.from_ical(f.read())
 
+		# return calendar events
 		for event in calendar.walk('VEVENT'):
 			summary = event.get('SUMMARY')
 			start = event.get('DTSTART')
 			end = event.get('DTEND')
+			
+			# only pull the events where "no school" is listed in the summary.
 			
 			if str(summary).find("No School") >0:
 				
@@ -212,30 +246,42 @@ class CycleDays(hass.Hass):
 				event_end_date_as_string = datetime.strftime(end.dt, '%Y-%m-%d')
 				event_end_date = datetime.strptime(event_end_date_as_string, '%Y-%m-%d')
 				
+				# get the date difference to figure out the length of the for loop
 				if event_start_date >= start_date and event_start_date <= end_date:
-				
-					print(f"Event Start date (cleaned) {event_start_date}")
-					print(f"Event start date as string: {event_start_date_as_string }")
-					print(f"Event: {summary}")
-					print(f"Start: {start}")
-					print(f"End: {end}")
-					
+							
 					dateDifference = (event_end_date - event_start_date).days
-					print(dateDifference)
-					print(type(dateDifference))
-
-					
-					print("-" * 20)
-					#start_date = event_start_date
-					#end_date = event_end_date
 					delta = timedelta(days=1)
 
-					#### add dates to initial start date
+					# when there is a date range, add loop through the range to add all of the dates
 					
-					for i in range (1,dateDifference):
-						print(event_start_date) + i
-
+					for i in range (dateDifference):
+						
+						new_date = event_start_date + timedelta(days=i)
+							
+						formatted_date = datetime.strftime(new_date, '%m/%d/%Y')
 	
+						# don't add a non school day if it's already in the list
+						if formatted_date not in non_school_days:
+							event_date_list.append(formatted_date)
+			
+		# now change it back to a comma-delimited list
+		non_school_days = non_school_days.split(", ")
+		
+		# Add non school days from calendar to manually entered non-school days
+		non_school_days.extend(event_date_list)
+		
+		entity = self.args["non_school_days"]
+			
+		# set the attribute to be all of the current non-school days
+		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
+			
+		# Populate the dropdown to be able to delete already entered dates
+		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+
+		# Set a system message for how many non-school days have been added.
+		self.set_state(self.args["system_message"], state = str(len(event_date_list)) + ' non-school days have been added from ' + calendar_friendly_name + '.')
+
+						
 	def addNonSchoolday(self, start_date, end_date, old, new, kwargs):
 		
 		entity = self.args["system_message"]
@@ -261,8 +307,6 @@ class CycleDays(hass.Hass):
 		non_school_days = list(non_school_days)
 		
 		already_entered = str(non_school_days).find(addedDay)
-
-		#entity = "input_text.non_school_days"
 
 		# check to see if the date was already entered
 		if already_entered <=0:
