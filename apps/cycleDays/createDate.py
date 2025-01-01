@@ -71,7 +71,8 @@ import os
 import time
 import icalendar
 from pathlib import Path
-import io
+import ast
+#import io
 
 class CycleDays(hass.Hass):
 	
@@ -91,6 +92,34 @@ class CycleDays(hass.Hass):
 		global calendar_path_to_file
 		calendar_path_to_file = calendar_path + "local_" + calendar_name + ".ics"
 		
+		# Specify the file name
+		global json_filename
+		json_filename = 'school_cycle_days.json'
+
+		# Open the file in read mode and load the JSON data into a dictionary
+		# Writing the list to a JSON file
+		# Combine the folder path and file name to get the full file path
+		
+		global file_path
+		file_path = os.path.join(calendar_path, json_filename)
+				
+		with open(file_path, 'r') as file:
+			loaded_data = json.load(file)
+		
+		non_school_days = str(loaded_data['No school days']).replace('[[', '[')
+		non_school_days = non_school_days.replace(']]', ']')
+
+		# make it a list again
+		non_school_days = ast.literal_eval(non_school_days)
+		
+		# set the attribute to be all of the current non-school days as well as holidays
+		self.set_state(self.args["non_school_days"], attributes =  {"No school days" : non_school_days }  )
+		
+		self.set_state(self.args["cycle_day_holidays"], attributes =  {"Holidays" :  loaded_data['Holiday Names']}  )
+		self.set_state(self.args["cycle_day_holidays"], attributes =  {"Holiday Dates" :  loaded_data['Holiday Dates']}  )
+
+		
+		print("Non-school days and holidays have been loaded from the " + json_filename + ".")
 		
 		# load the list of calendars when the app reloads
 		dir_list = os.listdir(calendar_path)
@@ -107,7 +136,10 @@ class CycleDays(hass.Hass):
 					calendar = calendar.replace("_"," ")
 					calendar_list_friendly_names.append(calendar.title())
 					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
-				
+		
+		# Populate the list of calendars from the function above
+		self.call_service("input_select/set_options", entity_id = self.args["calendar_list"], options = calendar_list_friendly_names)
+		
 		# set the system message back to blank.
 		self.set_state(self.args["system_message"], state = "" )
 		
@@ -141,11 +173,11 @@ class CycleDays(hass.Hass):
 		self.handle = self.button_entity.listen_state(self.refreshCalendarList)
 
 
-
+	
 	def deleteDates(self, start_date, end_date, old, new, kwargs):
 		
-# Delete the calendar file from .storage because HA doesn't have a way to delete individual events. 
-# This will be updated when that changes.
+	# Delete the calendar file from .storage because HA doesn't have a way to delete individual events. 
+	# This will be updated when that changes.
 
 		try:
 			os.remove(calendar_path_to_file)
@@ -157,9 +189,6 @@ class CycleDays(hass.Hass):
 		except FileNotFoundError:
 			print(f"File '{calendar_path_to_file}' not found.")
 
-	
-		
-	
 	def refreshCalendarList(self, start_date, end_date, old, new, kwargs):
 		
 		dir_list = os.listdir(calendar_path)
@@ -179,11 +208,8 @@ class CycleDays(hass.Hass):
 					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
 					print(calendar.title())
 
-
-		
-		self.call_service("input_select/set_options", entity_id = "input_select.calendar_list", options = calendar_list_friendly_names)
-		
-		#print("Test")
+		# prepopulate the list of calendar names from the .json file
+		self.call_service("input_select/set_options", entity_id = self.args["calendar_list"], options = calendar_list_friendly_names)
     
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
 
@@ -277,6 +303,19 @@ class CycleDays(hass.Hass):
 			
 		# Populate the dropdown to be able to delete already entered dates
 		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+		
+		holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
+		holiday_names = self.get_state(self.args["cycle_day_holidays"], attribute="Holidays")
+			
+		data_for_json = {
+			'No school days': non_school_days,
+			'Holiday Dates': holiday_dates,
+			'Holiday Names': holiday_names
+		}
+		
+		# use the global variables for consistency
+		with open(file_path, 'w') as file:
+			json.dump(data_for_json, file)
 
 		# Set a system message for how many non-school days have been added.
 		self.set_state(self.args["system_message"], state = str(len(event_date_list)) + ' non-school days have been added from ' + calendar_friendly_name + '.')
@@ -350,6 +389,22 @@ class CycleDays(hass.Hass):
 			
 			# Populate the dropdown to be able to delete already entered dates
 			self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+			
+			# write the variables to a .json file (defined above) to avoid the issue with HA deleting the attributes during restart
+			
+			file_path = os.path.join(calendar_path, json_filename)
+		
+			holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
+			holiday_names = self.get_state(self.args["cycle_day_holidays"], attribute="Holidays")
+			
+			data_for_json = {
+				'No school days': non_school_days,
+				'Holiday Dates': holiday_dates,
+				'Holiday Names': holiday_names
+			}
+			
+			with open(file_path, 'w') as file:
+				json.dump(data_for_json, file)
 
 		else:
 			print("This date already exists.")
@@ -393,6 +448,19 @@ class CycleDays(hass.Hass):
 		# set the attributes to the new list of non-school days
 		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 
+		file_path = os.path.join(calendar_path, json_filename)
+		
+		holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
+		holiday_names = self.get_state(self.args["cycle_day_holidays"], attribute="Holidays")
+			
+		data_for_json = {
+			'No school days': non_school_days,
+			'Holiday Dates': holiday_dates,
+			'Holiday Names': holiday_names
+		}
+			
+		with open(file_path, 'w') as file:
+			json.dump(data_for_json, file)
 		
 	def showHolidays(self, start_date, end_date, old, new, kwargs):
 		
@@ -430,14 +498,45 @@ class CycleDays(hass.Hass):
 		self.set_state(entity, attributes =  {"Holidays" :  holiday_names}  )
 		self.set_state(entity, attributes =  {"Holiday Dates" :  holiday_dates}  )
 		
+		file_path = os.path.join(calendar_path, json_filename)
+		
+		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
+		
+		data_for_json = {
+			'No school days': non_school_days,
+			'Holiday Dates': holiday_dates,
+			'Holiday Names': holiday_names
+		}
+			
+		with open(file_path, 'w') as file:
+			json.dump(data_for_json, file)
+				
+			#with open(file_path, 'r') as file:
+				#loaded_data = json.load(file)
+		
 	def deleteHolidays(self, start_date, end_date, old, new, kwargs):
 				
 		entity = self.args["cycle_day_holidays"]
+		
 		# set the entity attributes to blank
 		self.set_state(entity, attributes =  {"Holidays" :  ""}  )
 		self.set_state(entity, attributes =  {"Holiday Dates" :  ""}  )
 		
+		file_path = os.path.join(calendar_path, json_filename)
+		
+		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
+		
+		data_for_json = {
+			'No school days': non_school_days,
+			'Holiday Dates': '',
+			'Holiday Names': ''
+		}
+			
+		with open(file_path, 'w') as file:
+			json.dump(data_for_json, file)
+		
 		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='info'>All holidays have been deleted.</ha-alert>" )
+		
 		print("All holidays have been deleted.")
 		
 	def clearNonSchooldays(self, start_date, end_date, old, new, kwargs):
@@ -455,6 +554,20 @@ class CycleDays(hass.Hass):
 
 		# Update the input_select to set a single option of "None" as HA does not allow input_select entities without any options.
 		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = "None")
+		
+		file_path = os.path.join(calendar_path, json_filename)
+		
+		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
+		
+		data_for_json = {
+			'No school days': '',
+			'Holiday Dates': '',
+			'Holiday Names': ''
+		}
+			
+		with open(file_path, 'w') as file:
+			json.dump(data_for_json, file)
+		
 		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='success'>Non School Days have been deleted.</ha-alert>" )
 
 	def listDates (self, start_date, end_date, old, new, kwargs):
