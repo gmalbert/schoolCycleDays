@@ -60,7 +60,7 @@ Sometimes schools create their own calendars which can be exported into ```.ics`
 
 To accomplish the pull since AppDaemon does not yet allow receiving return responses from service calls (like a list of calendar events), I used the ```icalendar``` library to read through the ```.ics``` file, parse the data, and then add the dates from that calendar to the non-school days already in place. The app checks to see if a date has already been added in order to avoid duplication. You can delete non-school day entries from there.
 
-**Warning: This process can take a minute or two depending on how many entries are in the other calendar. Please be patient.**
+**Warning: This process can take a minute or two depending on how many entries are in the other calendar. Please be patient.** A system message will appear once complete showing how many entries have been added to the list.
 
 ## Holidays
 This app incorporates the ```holidays``` python import. The app can be configured as described in its [documentation](https://pypi.org/project/holidays/ "Python Holidays documentation"). You can either use the holiday list as specified or delete the holidays and add the non-school days manually. Once you have set up your preferred list of holidays, you need to run the task to add the holidays to the list of non-school days. 
