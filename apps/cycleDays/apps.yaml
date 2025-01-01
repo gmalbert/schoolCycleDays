@@ -16,7 +16,7 @@ printDate:
   day_number: input_number.cycle_day_restart_day
   
   bearer_token: !secret bearer_token
-  calendar_name: "calendar.test"
+  calendar_name: "calendar.school"
   calendar_path: !secret calendar_path
   button_entity_for_adding_dates: input_button.rerun_calendar_cycle_days
   button_entity_to_list_holidays: input_button.cycle_day_list_holidays

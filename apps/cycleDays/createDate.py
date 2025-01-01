@@ -61,6 +61,9 @@
 # HA Rest API URL to create events -- usually http://[HA URL]/api/services/calendar/create_event
 #	create_event_url
 
+# Input select to show all calendars
+#	calendar_list: input_select.calendar_list
+
 import appdaemon.plugins.hass.hassapi as hass
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
