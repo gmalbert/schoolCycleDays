@@ -31,7 +31,8 @@ Each of these helper entities are explained in detail in the comments at the top
 18. button_entity_to_delete_holidays: input_button.delete_holidays
 19. button_entity_to_add_dates_from_other_calendar: input_button.add_dates_from_other_calendar
 20. button_entity_to_refresh_calendar_list: input_button.refresh_calendar_list
-21. system_message: input_text.system_message
+21. calendar_list: input_select.calendar_list
+22. system_message: input_text.system_message
 
 If you change any of the names (the text above before the :), you'll need to replace them in the code. I did my best not to hard code anything, and instead use ```self.args["INPUT NAME"]```. In addition, you will need to create a Bearer Token to access the REST API. Instructions for creation are provided [here](https://www.home-assistant.io/docs/authentication/ "Authentication"). <b>As a warning, you must put the word ```Bearer``` in front of the created token to designate it as a bearer token.</b>
 
@@ -58,6 +59,8 @@ This is where you add non-school days (in-service, snow days, etc.). Any manuall
 Sometimes schools create their own calendars which can be exported into ```.ics``` format. In that case, you need to add the calendar to HA first and use the upload function. The app then allows you to select that calendar from a dropdown and add entries from the school's ```.ics``` file into the non-school days. This function searches for "No School". Other entries (concerts, field day, etc.) are not included as part of the pull from the ```.ics``` file. 
 
 To accomplish the pull since AppDaemon does not yet allow receiving return responses from service calls (like a list of calendar events), I used the ```icalendar``` library to read through the ```.ics``` file, parse the data, and then add the dates from that calendar to the non-school days already in place. The app checks to see if a date has already been added in order to avoid duplication. You can delete non-school day entries from there.
+
+**Warning: This process can take a minute or two depending on how many entries are in the other calendar. Please be patient.**
 
 ## Holidays
 This app incorporates the ```holidays``` python import. The app can be configured as described in its [documentation](https://pypi.org/project/holidays/ "Python Holidays documentation"). You can either use the holiday list as specified or delete the holidays and add the non-school days manually. Once you have set up your preferred list of holidays, you need to run the task to add the holidays to the list of non-school days. 
