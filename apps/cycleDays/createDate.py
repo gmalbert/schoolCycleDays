@@ -113,7 +113,8 @@ class CycleDays(hass.Hass):
 		non_school_days = non_school_days.replace(']]', ']')
 
 		# make it a list again
-		non_school_days = ast.literal_eval(non_school_days)
+		if non_school_days != '':
+			non_school_days = ast.literal_eval(non_school_days)
 		
 		# set the attribute to be all of the current non-school days as well as holidays
 		self.set_state(self.args["non_school_days"], attributes =  {"No school days" : non_school_days }  )
@@ -247,7 +248,7 @@ class CycleDays(hass.Hass):
 		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
 		
 		# Deal with the "None" or empty strings
-		if non_school_days[0] == "[]" or  non_school_days[0] =="" or len(non_school_days) == 0:
+		if non_school_days[0] == '[]' or  non_school_days[0] =='' or len(non_school_days) == 0:
 			non_school_days = ""
 		
 		characters_to_remove = ["[", "]", "'"]
@@ -298,9 +299,16 @@ class CycleDays(hass.Hass):
 		
 		# Add non school days from calendar to manually entered non-school days
 		non_school_days.extend(event_date_list)
+
+		# remove any blank entries
+		if '' in non_school_days:
+			non_school_days.remove('')
 		
 		entity = self.args["non_school_days"]
-			
+
+		# sort the list
+		non_school_days.sort(key=lambda date: datetime.strptime(date, "%m/%d/%Y"))
+		
 		# set the attribute to be all of the current non-school days
 		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 			
@@ -371,7 +379,6 @@ class CycleDays(hass.Hass):
 
 			# now change it back to a comma-delimited list
 			non_school_days = non_school_days.split(", ")
-			#print(non_school_days)	
 			
 			# delete empty or none in list to allow it to be sorted by date below
 			
@@ -383,10 +390,8 @@ class CycleDays(hass.Hass):
 				
 				non_school_days.sort(key=lambda date: datetime.strptime(date, "%m/%d/%Y"))
 			
-			# Sort the list in-place
-			
 			entity = self.args["non_school_days"]
-			
+
 			# set the attribute to be all of the current non-school days
 			self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 			
@@ -444,10 +449,13 @@ class CycleDays(hass.Hass):
 		entity = self.args["system_message"]
 		self.set_state(entity, state = day_to_delete + ' removed as a non school day.')
 		
+		non_school_days.sort(key=lambda date: datetime.strptime(date, "%m/%d/%Y"))
+		
 		# update the dropdown with the new list
 		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
 		
 		entity = self.args["non_school_days"]
+		
 		# set the attributes to the new list of non-school days
 		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 
@@ -481,7 +489,7 @@ class CycleDays(hass.Hass):
 		entity = self.args["cycle_day_holidays"]
 		status = self.set_state(entity, state = start_year)
 		
-		# Set up the dictionary using the instructions from https://pypi.org/project/holidays/
+		# Set up the holiday dictionary using the instructions from https://pypi.org/project/holidays/
 		
 		us_holidays = holidays.US(state='NH', years={start_year,next_year})
 		
@@ -513,9 +521,6 @@ class CycleDays(hass.Hass):
 			
 		with open(file_path, 'w') as file:
 			json.dump(data_for_json, file)
-				
-			#with open(file_path, 'r') as file:
-				#loaded_data = json.load(file)
 		
 	def deleteHolidays(self, start_date, end_date, old, new, kwargs):
 				
@@ -575,7 +580,6 @@ class CycleDays(hass.Hass):
 
 	def listDates (self, start_date, end_date, old, new, kwargs):
 
-
 		holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
 
 		entity = self.args["system_message"]
@@ -617,6 +621,11 @@ class CycleDays(hass.Hass):
 
 		non_school_days = list(non_school_days)
 
+		# set the counts to 0 before going through the loops
+		non_school_day_count = 0
+		school_day_count = 0
+		weekend_count = 0
+		
 		# As long as the initial start date is less than or equal to the provided end date, run this loop
 		while start_date <= end_date:
 			
@@ -630,23 +639,31 @@ class CycleDays(hass.Hass):
 				next_day = start_date + timedelta(days=1)
 				next_day = next_day.strftime('%Y-%m-%d')
 				
-				# set up the request to include the current date in the loop, the next day, the cycle day number, and the special
+				# set up the request to include the current date in the loop, the next day, the cycle day number, and the school special
 				data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number), 'description': cycle_days[day_number-1]}
 				
 				# Run this through the HA REST API
 				response = requests.post(f'{url}', headers=headers, json=data)
 				print(start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created')
-				#entity = "input_text.system_message"
+
 				self.set_state(self.args["system_message"], state = start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created')
 						
 				day_number = day_number + 1
+				
+				school_day_count += 1
+				
 			elif date.weekday(start_date) < 5:
 				print(start_date.strftime('%m/%d/%Y') + ' has been skipped as a non-school day.')
+				non_school_day_count += 1
 			else:
 				print(start_date.strftime('%m/%d/%Y') + ' is a weekend day.')
+				weekend_count += 1
 			
 			start_date += delta
         
 			if day_number > 5:
 				day_number = 1
+		
+		# print a system message with all of the statistics.
+		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='success'>School Days added: " + str(school_day_count) + ". Non-School Days: " + str(non_school_day_count) + ". Weekend Days: " + str(weekend_count) + ".</ha-alert>") 
 
