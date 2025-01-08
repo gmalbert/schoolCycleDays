@@ -53,6 +53,8 @@ Once you add holidays and non-school days, this is the interface you can continu
 ## Cycle Days
 This is where you add non-school days (in-service, snow days, etc.). Any manually added days will be added to the holidays in your selected region. When running the calendar cycle days (to add the dates to your calendar), you can select the date range for it to run. This allows you to start from today or yesterday, for example, when you have to rerun the calendar due to a snow day, etc.
 
+HA currently does not have the ability to edit or delete events through automations. **In order to avoid duplication of calendar entries, you should delete all calendar events before re-running the cycle days.** Once HA implements editing and deleting events programmatically, I'll modify this app. As the HA API currently works, you can only add events.
+
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/cycle_days.JPG "Cycle Days")
 
 ## Adding events from another calendar
