@@ -75,7 +75,6 @@ import time
 import icalendar
 from pathlib import Path
 import ast
-#import io
 
 class CycleDays(hass.Hass):
 	
@@ -122,8 +121,10 @@ class CycleDays(hass.Hass):
 		self.set_state(self.args["cycle_day_holidays"], attributes =  {"Holidays" :  loaded_data['Holiday Names']}  )
 		self.set_state(self.args["cycle_day_holidays"], attributes =  {"Holiday Dates" :  loaded_data['Holiday Dates']}  )
 
-		
 		print("Non-school days and holidays have been loaded from the " + json_filename + ".")
+
+		# Populate the dropdown to be able to delete already entered dates
+		self.call_service("input_select/set_options", entity_id = self.args["non_school_days_dropdown"], options = non_school_days)
 		
 		# load the list of calendars when the app reloads
 		dir_list = os.listdir(calendar_path)
@@ -210,7 +211,7 @@ class CycleDays(hass.Hass):
 					calendar = calendar.replace("_"," ")
 					calendar_list_friendly_names.append(calendar.title())
 					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
-					print(calendar.title())
+					print(calendar.title() + ' has been loaded.')
 
 		# prepopulate the list of calendar names from the .json file
 		self.call_service("input_select/set_options", entity_id = self.args["calendar_list"], options = calendar_list_friendly_names)
@@ -313,7 +314,7 @@ class CycleDays(hass.Hass):
 		self.set_state(entity, attributes =  {"No school days" :  non_school_days}  )
 			
 		# Populate the dropdown to be able to delete already entered dates
-		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+		self.call_service("input_select/set_options", entity_id = self.args["non_school_days_dropdown"], options = non_school_days)
 		
 		holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
 		holiday_names = self.get_state(self.args["cycle_day_holidays"], attribute="Holidays")
@@ -416,6 +417,7 @@ class CycleDays(hass.Hass):
 
 		else:
 			print("This date already exists.")
+			
 			# if the date was already entered, send an error message and stop processing
 			self.set_state(self.args["system_message"], state = "<ha-alert alert-type='error'>This date already exists.</ha-alert>" )
 
@@ -640,13 +642,13 @@ class CycleDays(hass.Hass):
 				next_day = next_day.strftime('%Y-%m-%d')
 				
 				# set up the request to include the current date in the loop, the next day, the cycle day number, and the school special
-				data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number), 'description': cycle_days[day_number-1]}
+				data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ')', 'description': cycle_days[day_number-1]}
 				
 				# Run this through the HA REST API
 				response = requests.post(f'{url}', headers=headers, json=data)
 				print(start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created')
 
-				self.set_state(self.args["system_message"], state = start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created')
+				self.set_state(self.args["system_message"], state = start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created.')
 						
 				day_number = day_number + 1
 				
