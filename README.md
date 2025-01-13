@@ -88,4 +88,4 @@ Sample calendar event when you click on an entry.
 ![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/calendar_event.JPG "Sample calendar entry")
 
 ## Conclusion
-This is my first python program, so I am positive that the code is a lot less efficient than it could have been. It works, and so I'm putting it out there for others. If you have suggestions for improving the code and/or want new features, please create a PR, and I'll be happy to do my best. I enjoy this even if it can be a bit frustrating at times.
+This is my first python program, so I am positive that the code is a lot less efficient than it could have been. It works, and so I'm putting it out there for others. I have heavily commented the code both for my later coding as well as others so you can understand my logic. If you have suggestions for improving the code and/or want new features, please create a PR, and I'll do my best. I enjoy this even if it can be a bit frustrating at times.
