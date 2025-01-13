@@ -32,3 +32,7 @@ printDate:
   create_event_url: !secret create_event_url
   calendar_event_url: !secret calendar_event_url
   calendar_list: input_select.calendar_list
+  calendar_list_for_selection: input_select.calendar_list_for_selection
+  include_holidays_in_calendar: input_boolean.include_holidays_in_calendar
+  include_weekends_in_calendar: input_boolean.include_weekends_in_calendar
+  button_to_delete_and_rerun_calendar_cycle_days: input_button.delete_and_rerun_calendar_cycle_days

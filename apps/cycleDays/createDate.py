@@ -64,6 +64,17 @@
 # Input select to show all calendars
 #	calendar_list: input_select.calendar_list
 
+# Input select to show all calendars to re-run the dates
+#	calendar_list_for_selection: input_select.calendar_list_for_selection
+
+# Toggle to include holidays and/or weekends in the calendar when run (default is off)
+
+#	include_holidays_in_calendar: input_boolean.include_holidays_in_calendar
+#	include_weekends_in_calendar: input_boolean.include_weekends_in_calendar
+
+# Delete all cycle days and re-run (done to avoid duplication)
+#	delete_and_rerun_calendar_cycle_days: input_button.delete_and_rerun_calendar_cycle_days
+
 import appdaemon.plugins.hass.hassapi as hass
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
@@ -88,6 +99,8 @@ class CycleDays(hass.Hass):
 		
 		global calendar_path
 		calendar_path = self.args["calendar_path"]
+		
+		global calendar_name
 		calendar_name = self.args["calendar_name"]
 		
 		# concatenate the path with the name of the calendar, and then append the .ics extension
@@ -143,7 +156,10 @@ class CycleDays(hass.Hass):
 					calendar_list_friendly_names = sorted(calendar_list_friendly_names)
 		
 		# Populate the list of calendars from the function above
+		# Populate both the calendar lists for pulling other events and the calendar to select a calendar to re-run events
+		
 		self.call_service("input_select/set_options", entity_id = self.args["calendar_list"], options = calendar_list_friendly_names)
+		self.call_service("input_select/set_options", entity_id = self.args["calendar_list_for_selection"], options = calendar_list_friendly_names)
 		
 		# set the system message back to blank.
 		self.set_state(self.args["system_message"], state = "" )
@@ -176,9 +192,11 @@ class CycleDays(hass.Hass):
 		
 		self.button_entity = self.get_entity(self.args["button_entity_to_refresh_calendar_list"])
 		self.handle = self.button_entity.listen_state(self.refreshCalendarList)
+		
+		self.button_entity = self.get_entity(self.args["button_to_delete_and_rerun_calendar_cycle_days"])
+		self.handle = self.button_entity.listen_state(self.deleteAndRerun)
 
 
-	
 	def deleteDates(self, start_date, end_date, old, new, kwargs):
 		
 	# Delete the calendar file from .storage because HA doesn't have a way to delete individual events. 
@@ -515,6 +533,8 @@ class CycleDays(hass.Hass):
 		
 		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
 		
+		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='info'>All holidays have been added.</ha-alert>" )
+		
 		data_for_json = {
 			'No school days': non_school_days,
 			'Holiday Dates': holiday_dates,
@@ -580,6 +600,14 @@ class CycleDays(hass.Hass):
 		
 		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='success'>Non School Days have been deleted.</ha-alert>" )
 
+	def deleteAndRerun (self, start_date, end_date, old, new, kwargs):
+		
+		# to avoid duplicates, delete the calendar and then re-run the dates
+		# this saves clicking delete followed by clicking re-run cycle dates
+		
+		self.deleteDates(None,None,None,None,None)
+		self.listDates(None,None,None,None,None)
+	
 	def listDates (self, start_date, end_date, old, new, kwargs):
 
 		holiday_dates = self.get_state(self.args["cycle_day_holidays"], attribute="Holiday Dates")
@@ -628,39 +656,62 @@ class CycleDays(hass.Hass):
 		school_day_count = 0
 		weekend_count = 0
 		
+		# input_boolean to detect whether re-running the calendar should include weekends and/or holidays
+		# including these allows the local calendar to pull the current day rather than the next day in the calendar
+		# if you only include the regular cycle days, then the local calendar will pull the next day as the current entry
+		
+		include_holidays = self.get_state(self.args["include_holidays_in_calendar"])
+		include_weekends = self.get_state(self.args["include_weekends_in_calendar"])
+				
 		# As long as the initial start date is less than or equal to the provided end date, run this loop
 		while start_date <= end_date:
+			
+			# HA requires all day events to start one day and end the next day
+			next_day = start_date + timedelta(days=1)
+			next_day = next_day.strftime('%Y-%m-%d')
 			
 			# only check against the non_school_days if the date is a weekday.
 			# check if the current date in the loop is also in the non-school days.
 			# remember that holidays were added to the non-school days earlier in this function.
 			
 			if date.weekday(start_date) < 5 and start_date.strftime("%m/%d/%Y") not in non_school_days:
-
-				# HA requires all day events to start one day and end the next day
-				next_day = start_date + timedelta(days=1)
-				next_day = next_day.strftime('%Y-%m-%d')
 				
 				# set up the request to include the current date in the loop, the next day, the cycle day number, and the school special
 				data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ')', 'description': cycle_days[day_number-1]}
 				
 				# Run this through the HA REST API
 				response = requests.post(f'{url}', headers=headers, json=data)
-				print(start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created')
+
+				print(start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created.')
 
 				self.set_state(self.args["system_message"], state = start_date.strftime("%m/%d/%Y") + ' - Day ' + str(day_number) + ' (' + cycle_days[day_number-1] + ') created.')
 						
 				day_number = day_number + 1
 				
 				school_day_count += 1
-				
+			
+			# holiday and non-school days
 			elif date.weekday(start_date) < 5:
 				print(start_date.strftime('%m/%d/%Y') + ' has been skipped as a non-school day.')
 				non_school_day_count += 1
+				
+				if include_holidays == 'on':
+					data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'No School', 'description': 'Holiday'}
+				
+					# Run this through the HA REST API
+					response = requests.post(f'{url}', headers=headers, json=data)
+				
+			# weekend days
 			else:
 				print(start_date.strftime('%m/%d/%Y') + ' is a weekend day.')
 				weekend_count += 1
-			
+				
+				if include_weekends == 'on':
+					data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'No School', 'description': 'Weekend'}
+
+					# Run this through the HA REST API
+					response = requests.post(f'{url}', headers=headers, json=data)
+
 			start_date += delta
         
 			if day_number > 5:
