@@ -74,6 +74,9 @@ This app incorporates the ```holidays``` python import. The app can be configure
 ## Deleting calendar events
 HA does not currently have a way to delete individual events through an automation, but I'm hoping that will change in the near future. In the meantime, the ```Delete Calendar Events``` button physically deletes the .ics file from the ```.storage``` folder. HA keeps a pointer to that calendar, and the .ics will be recreated upon adding at least one event.
 
+## Deleting and re-running calendar events
+The **Delete and ReRun Calendar Cycle Days** function allows you to delete the calendar and re-run the entire calendar again (based on your start and end dates). This short function removes the need to delete the calendar by hitting a button and then rerunning the cycle days.  
+
 ## Calendar
 This is what the local HA calendar looks like once you have added the cycle days.
 
