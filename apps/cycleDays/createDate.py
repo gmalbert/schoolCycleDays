@@ -64,9 +64,6 @@
 # Input select to show all calendars
 #	calendar_list: input_select.calendar_list
 
-# Input select to show all calendars to re-run the dates
-#	calendar_list_for_selection: input_select.calendar_list_for_selection
-
 # Toggle to include holidays and/or weekends in the calendar when run (default is off)
 
 #	include_holidays_in_calendar: input_boolean.include_holidays_in_calendar
@@ -236,7 +233,7 @@ class CycleDays(hass.Hass):
     
 	def addOtherCalendarDates(self, start_date, end_date, old, new, kwargs):
 
-		calendar_friendly_name = [self.get_state("input_select.calendar_list")]
+		calendar_friendly_name = [self.get_state(self.args["calendar_list"])]
 		
 		# find the calendar in the list (the index)
 		characters_to_remove = ["[", "]","'"]
@@ -248,11 +245,9 @@ class CycleDays(hass.Hass):
 			
 		calendar_technical_name = "local_calendar." + str(calendar_friendly_name).lower() + ".ics"
 		
-		
 		calendar_path = self.args["calendar_path"]
 		calendar_path = calendar_path + calendar_technical_name
 		calendar_path_to_file = Path(calendar_path)
-		
 		
 		# get the two date inputs for the start and end date
 		start_date = self.get_state(self.args["start_date"])
@@ -446,7 +441,7 @@ class CycleDays(hass.Hass):
 		non_school_days = [self.get_state(self.args["non_school_days"], attribute="No school days")]
 		
 		# get the date from the drop down that was passed
-		day_to_delete = [self.get_state("input_select.non_school_days")]
+		day_to_delete = [self.get_state(self.args["non_school_days_dropdown"])]
 
 		# clean up the string
 		characters_to_remove = ["[", "]", "!", "'"]
@@ -472,7 +467,7 @@ class CycleDays(hass.Hass):
 		non_school_days.sort(key=lambda date: datetime.strptime(date, "%m/%d/%Y"))
 		
 		# update the dropdown with the new list
-		self.call_service("input_select/set_options", entity_id = "input_select.non_school_days", options = non_school_days)
+		self.call_service("input_select/set_options", entity_id = self.args["non_school_days_dropdown"], options = non_school_days)
 		
 		entity = self.args["non_school_days"]
 		
@@ -695,6 +690,7 @@ class CycleDays(hass.Hass):
 				print(start_date.strftime('%m/%d/%Y') + ' has been skipped as a non-school day.')
 				non_school_day_count += 1
 				
+				# if the include holidays input_boolean is selected
 				if include_holidays == 'on':
 					data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'No School', 'description': 'Holiday'}
 				
@@ -706,6 +702,7 @@ class CycleDays(hass.Hass):
 				print(start_date.strftime('%m/%d/%Y') + ' is a weekend day.')
 				weekend_count += 1
 				
+				# if the include weekends input_boolean is selected
 				if include_weekends == 'on':
 					data = {'entity_id': self.args["calendar_name"], 'start_date': start_date.strftime('%Y-%m-%d'), 'end_date': next_day, 'summary': 'No School', 'description': 'Weekend'}
 
