@@ -36,6 +36,7 @@ Each of these helper entities are explained in detail in the comments at the top
 23. include_weekends_in_calendar: input_boolean.include_weekends_in_calendar
 24. delete_and_rerun_calendar_cycle_days: input_button.delete_and_rerun_calendar_cycle_days
 25. system_message: input_text.system_message
+26. current_calendar: input_text.current_calendar
 
 If you change any of the names (the text above before the :), you'll need to replace them in the code. I did my best not to hard code anything, and instead use ```self.args["INPUT NAME"]```. In addition, you will need to create a Bearer Token to access the REST API. Instructions for creation are provided [here](https://www.home-assistant.io/docs/authentication/ "Authentication"). <b>As a warning, you must put the word ```Bearer``` in front of the created token to designate it as a bearer token.</b>
 
