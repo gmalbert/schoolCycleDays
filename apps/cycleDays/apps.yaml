@@ -36,3 +36,4 @@ printDate:
   include_holidays_in_calendar: input_boolean.include_holidays_in_calendar
   include_weekends_in_calendar: input_boolean.include_weekends_in_calendar
   button_to_delete_and_rerun_calendar_cycle_days: input_button.delete_and_rerun_calendar_cycle_days
+  current_calendar: input_text.current_calendar

@@ -72,6 +72,9 @@
 # Delete all cycle days and re-run (done to avoid duplication)
 #	delete_and_rerun_calendar_cycle_days: input_button.delete_and_rerun_calendar_cycle_days
 
+# Current calendar to show on HA page
+#	current_calendar: input_text.current_calendar
+
 import appdaemon.plugins.hass.hassapi as hass
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
@@ -108,13 +111,19 @@ class CycleDays(hass.Hass):
 		global json_filename
 		json_filename = 'school_cycle_days.json'
 
+		#Set the Current calendar variable to display in HA
+		calendar_name = calendar_name.replace("_"," ")
+		calendar_name = calendar_name.replace("calendar."," ")
+
+		self.set_state(self.args["current_calendar"], state = calendar_name.title())
+		
 		# Open the file in read mode and load the JSON data into a dictionary
 		# Writing the list to a JSON file
 		# Combine the folder path and file name to get the full file path
 		
 		global file_path
 		file_path = os.path.join(calendar_path, json_filename)
-				
+			
 		with open(file_path, 'r') as file:
 			loaded_data = json.load(file)
 		
