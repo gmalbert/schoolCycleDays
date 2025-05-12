@@ -9,6 +9,12 @@ This app relies heavily on Home Assistant (HA) created entities, and using the H
 
 Add the ```createDate.py``` in your ```apps``` folder, and modify ```apps.yaml``` as necessary. The yaml file I included has only this application, so you will need to add the text to any other apps you have already installed. This app is driven off of HA helper entities: input_datetime, input_text, and input_button. The intent was to have HA store the values so they were readable to the user and persisted after restarts. 
 
+### Special Note
+If the app is not showing up on the HACS repository list, you will need to go into your HA settings and into the configuration for HACS. There, be sure the ```Enable AppDaemon apps discovery & tracking``` is enabled.
+
+![alt text](https://github.com/gmalbert/schoolCycleDays/blob/main/hacs_config_screen.png "Config page")
+
+### Helpers
 Each of these helper entities are explained in detail in the comments at the top of the application. You will need to create the following entities (the ones I created are listed):
 
 1. non_school_days: input_text.non_school_days
