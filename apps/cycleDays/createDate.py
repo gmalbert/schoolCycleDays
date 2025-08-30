@@ -9,7 +9,7 @@
 # Date input to pick a day to add to the list of non-school days.
 #  	added_date: input_datetime.add_non_school_day
 
-# List of all  holidays
+# List of all holidays
 #	cycle_day_holidays: input_text.cycle_day_holidays
 
 # Date to begin the cycle days on the calendar.
@@ -201,6 +201,9 @@ class CycleDays(hass.Hass):
 		
 		self.button_entity = self.get_entity(self.args["button_to_delete_and_rerun_calendar_cycle_days"])
 		self.handle = self.button_entity.listen_state(self.deleteAndRerun)
+		
+		self.button_entity = self.get_entity(self.args["button_to_change_calendar"])
+		self.handle = self.button_entity.listen_state(self.changeDefaultCalendar)
 
 
 	def deleteDates(self, start_date, end_date, old, new, kwargs):
@@ -290,29 +293,45 @@ class CycleDays(hass.Hass):
 			end = event.get('DTEND')
 			
 			# only pull the events where "no school" is listed in the summary.
-			
-			if str(summary).find("No School") >0:
+			if "No School" in str(summary):
 				
-				event_start_date_as_string = datetime.strftime(start.dt, '%Y-%m-%d')
-				event_start_date = datetime.strptime(event_start_date_as_string, '%Y-%m-%d')
+				if isinstance(start.dt, datetime):
+					event_start_date = start.dt.date()
+				else:
+					event_start_date = start.dt
 				
-				event_end_date_as_string = datetime.strftime(end.dt, '%Y-%m-%d')
-				event_end_date = datetime.strptime(event_end_date_as_string, '%Y-%m-%d')
+				if isinstance(end.dt, datetime):
+					event_end_date = end.dt.date()
+				else:
+					event_end_date = end.dt
 				
-				# get the date difference to figure out the length of the for loop
+				# Adjust for exclusive DTEND
+					event_end_date -= timedelta(days=1)
+
+				if isinstance(start_date, str):
+					start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+				elif isinstance(start_date, datetime):
+					start_date = start_date.date()
+				# If it's already a date, do nothing
+				
+				if isinstance(end_date, str):
+					end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+				elif isinstance(end_date, datetime):
+					end_date = end_date.date()
+				# If it's already a date, do nothing
+				
 				if event_start_date >= start_date and event_start_date <= end_date:
-							
 					dateDifference = (event_end_date - event_start_date).days
 					delta = timedelta(days=1)
 
 					# when there is a date range, add loop through the range to add all of the dates
-					
-					for i in range (dateDifference):
+					for i in range (dateDifference + 1):
 						
 						new_date = event_start_date + timedelta(days=i)
 							
-						formatted_date = datetime.strftime(new_date, '%m/%d/%Y')
-	
+						#formatted_date = datetime.strftime(new_date, '%m/%d/%Y')
+						formatted_date = new_date.strftime('%m/%d/%Y')
+
 						# don't add a non school day if it's already in the list
 						if formatted_date not in non_school_days:
 							event_date_list.append(formatted_date)
@@ -611,6 +630,11 @@ class CycleDays(hass.Hass):
 		
 		self.deleteDates(None,None,None,None,None)
 		self.listDates(None,None,None,None,None)
+		
+	def changeDefaultCalendar (self, start_date, end_date, old, new, kwargs):
+		
+		print("Change Default calendar")
+		test
 	
 	def listDates (self, start_date, end_date, old, new, kwargs):
 
