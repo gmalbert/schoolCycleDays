@@ -72,6 +72,8 @@ Sometimes schools create their own calendars which can be exported into ```.ics`
 
 To accomplish the pull since AppDaemon does not yet allow receiving return responses from service calls (like a list of calendar events), I used the ```icalendar``` library to read through the ```.ics``` file, parse the data, and then add the dates from that calendar to the non-school days already in place. The app checks to see if a date has already been added in order to avoid duplication. You can delete non-school day entries from there.
 
+Though it worked well the first year, when I tried to set up the second year, the calendar was not formatted properly which caused Home Assistant to error out. I created a ```no_school_calendar.py``` to pull all entries from a ```.ics``` file where the summary had the words "No School." To make this work, you specify an input and output file at the top of the file, like ```input_file = "calendar.ics"``` and ```output_file = "no_school_clean.ics"```. Then just run the python script, and it will create a much smaller ```.ics``` file to be imported into Home Assistant.
+
 **Warning: This process can take a minute or two depending on how many entries are in the other calendar. Please be patient.** A system message will appear once complete showing how many entries have been added to the list.
 
 ## Holidays
