@@ -52,8 +52,11 @@
 # Button entity to delete an individual non-school day
 #	button_entity_to_delete_non_school_day: input_button.delete_non_school_day
   
-# Button entity to delete all calendar events (actually deletes the physical .ics from the .storage file
+# Button entity to delete all calendar events (actually deletes the physical .ics from the .storage file)
 #	button_entity_to_delete_calendar_events: input_button.delete_calendar_events
+
+# Button entity to export the .ics file
+#	button_entity_to_export_ics: input_button.export_ics
 
 # For displaying system messages (error, success, etc.)  
 #	system_message: input_text.system_message
@@ -75,6 +78,9 @@
 # Current calendar to show on HA page
 #	current_calendar: input_text.current_calendar
 
+# Export the calendar to a .ics file for importing into other calendars like Outlook, Google, etc.
+# 	button_to_export_ics: input_button.export_ics
+
 import appdaemon.plugins.hass.hassapi as hass
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
@@ -86,6 +92,10 @@ import time
 import icalendar
 from pathlib import Path
 import ast
+from icalendar import Calendar, Event
+import uuid
+import shutil
+
 
 class CycleDays(hass.Hass):
 	
@@ -204,7 +214,9 @@ class CycleDays(hass.Hass):
 		
 		self.button_entity = self.get_entity(self.args["button_to_change_calendar"])
 		self.handle = self.button_entity.listen_state(self.changeDefaultCalendar)
-
+		
+		self.button_entity = self.get_entity(self.args["button_to_export_ics"])
+		self.handle = self.button_entity.listen_state(self.exportICS)
 
 	def deleteDates(self, start_date, end_date, old, new, kwargs):
 		
@@ -337,11 +349,12 @@ class CycleDays(hass.Hass):
 							event_date_list.append(formatted_date)
 			
 		# now change it back to a comma-delimited list
-		non_school_days = non_school_days.split(", ")
+		non_school_days = list(set(non_school_days))
+		#non_school_days = non_school_days.split(", ")
 		
 		# Add non school days from calendar to manually entered non-school days
 		non_school_days.extend(event_date_list)
-
+		non_school_days = list(set(non_school_days))
 		# remove any blank entries
 		if '' in non_school_days:
 			non_school_days.remove('')
@@ -591,6 +604,37 @@ class CycleDays(hass.Hass):
 		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='info'>All holidays have been deleted.</ha-alert>" )
 		
 		print("All holidays have been deleted.")
+		
+	def exportICS(self, start_date, end_date, old, new, kwargs):
+				
+		calendar_friendly_name = [self.get_state(self.args["calendar_list"])]
+		
+		# find the calendar in the list (the index)
+		characters_to_remove = ["[", "]","'"]
+						
+		for character in characters_to_remove:
+			calendar_friendly_name = str(calendar_friendly_name).replace(character, '')
+				
+		calendar_friendly_name = calendar_friendly_name.replace(" ","_")
+			
+		calendar_technical_name = "local_calendar." + str(calendar_friendly_name).lower() + ".ics"
+		
+		calendar_path = self.args["calendar_path"]
+		calendar_path = calendar_path + calendar_technical_name
+		calendar_path_to_file = Path(calendar_path)
+		
+		source = calendar_path_to_file # adjust as needed
+		destination = "/homeassistant/www/" + calendar_technical_name
+		
+		try:
+			shutil.copyfile(source, destination)
+			self.log("Calendar file copied successfully.")
+		except Exception as e:
+			self.log(f"Error copying calendar file: {e}")
+		
+		self.set_state(self.args["system_message"], state = "<ha-alert alert-type='info'>The " + self.get_state(self.args["calendar_list"]) + " calendar has been exported. [(Download)](http://homeassistant.local:8123/local/" + calendar_technical_name + ")</ha-alert>" )
+		
+		print(f"The {self.get_state(self.args["calendar_list"])} has been exported.")
 		
 	def clearNonSchooldays(self, start_date, end_date, old, new, kwargs):
 
