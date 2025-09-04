@@ -52,11 +52,17 @@ views:
               - entity: input_text.cycle_day_4
               - entity: input_text.cycle_day_5
               - type: divider
+              - entity: input_boolean.include_holidays_in_calendar
+              - entity: input_boolean.include_weekends_in_calendar
               - entity: input_button.rerun_calendar_cycle_days
               - entity: input_button.delete_calendar_events
+              - entity: input_button.delete_and_rerun_calendar_cycle_days
             title: Cycle Days
       - type: grid
         cards:
+          - type: markdown
+            content: '  #{{ states(''input_text.current_calendar'') }} '
+            title: Current Calendar
           - type: markdown
             content: >-
               #### These days will be added to the holidays.
