@@ -1,5 +1,0 @@
-requests
-holidays
-python-dateutil
-icalendar
-shutil
