@@ -7,12 +7,13 @@ services:
       - "8088:8088"
     environment:
       SCD_DATABASE_PATH: /data/school_cycle_days.sqlite3
-
+      SCD_REQUIRE_LOGIN: ${SCD_REQUIRE_LOGIN:-false}
+      SCD_SESSION_SECRET: ${SCD_SESSION_SECRET:-}
+      SCD_SOURCE_REFRESH_SECONDS: ${SCD_SOURCE_REFRESH_SECONDS:-21600}
       # Optional direct Home Assistant adapter.
       SCD_HA_URL: ${SCD_HA_URL:-}
       SCD_HA_TOKEN: ${SCD_HA_TOKEN:-}
       SCD_VERIFY_SSL: ${SCD_VERIFY_SSL:-true}
-
       # Optional MQTT / Home Assistant Discovery adapter.
       SCD_MQTT_HOST: ${SCD_MQTT_HOST:-}
       SCD_MQTT_PORT: ${SCD_MQTT_PORT:-1883}
