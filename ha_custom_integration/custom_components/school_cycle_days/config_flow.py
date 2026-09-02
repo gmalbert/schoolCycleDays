@@ -24,7 +24,11 @@ from .const import (
 )
 
 
-def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+def _calendar_selector():
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar"))
+
+
+def _user_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     return vol.Schema(
         {
@@ -32,7 +36,23 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(
                 CONF_CALENDAR_ENTITY,
                 default=defaults.get(CONF_CALENDAR_ENTITY, DEFAULT_CALENDAR_ENTITY),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
+            ): _calendar_selector(),
+            vol.Required(CONF_US_STATE, default=defaults.get(CONF_US_STATE, DEFAULT_US_STATE)): str,
+            vol.Optional(
+                CONF_LEGACY_CALENDAR_STORAGE_PATH,
+                default=defaults.get(CONF_LEGACY_CALENDAR_STORAGE_PATH, ""),
+            ): str,
+        }
+    )
+
+
+def _options_schema(defaults: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_CALENDAR_ENTITY,
+                default=defaults.get(CONF_CALENDAR_ENTITY, DEFAULT_CALENDAR_ENTITY),
+            ): _calendar_selector(),
             vol.Required(CONF_US_STATE, default=defaults.get(CONF_US_STATE, DEFAULT_US_STATE)): str,
             vol.Optional(
                 CONF_LEGACY_CALENDAR_STORAGE_PATH,
@@ -55,7 +75,7 @@ class SchoolCycleDaysConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not data.get(CONF_LEGACY_CALENDAR_STORAGE_PATH):
                 data.pop(CONF_LEGACY_CALENDAR_STORAGE_PATH, None)
             return self.async_create_entry(title=data[CONF_NAME], data=data)
-        return self.async_show_form(step_id="user", data_schema=_schema())
+        return self.async_show_form(step_id="user", data_schema=_user_schema())
 
     async def async_step_import(self, import_data: dict[str, Any]):
         await self.async_set_unique_id(DOMAIN)
@@ -86,4 +106,4 @@ class SchoolCycleDaysOptionsFlow(config_entries.OptionsFlow):
         current = {**self.config_entry.data, **self.config_entry.options}
         if user_input is not None:
             return self.async_create_entry(title="", data=dict(user_input))
-        return self.async_show_form(step_id="init", data_schema=_schema(current))
+        return self.async_show_form(step_id="init", data_schema=_options_schema(current))
