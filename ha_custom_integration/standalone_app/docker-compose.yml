@@ -1,0 +1,14 @@
+services:
+  school-cycle-days:
+    build: .
+    container_name: school-cycle-days
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      SCD_HA_URL: ${SCD_HA_URL}
+      SCD_HA_TOKEN: ${SCD_HA_TOKEN}
+      SCD_VERIFY_SSL: ${SCD_VERIFY_SSL:-true}
+      SCD_DATABASE_PATH: /data/school_cycle_days.sqlite3
+    volumes:
+      - ./data:/data
