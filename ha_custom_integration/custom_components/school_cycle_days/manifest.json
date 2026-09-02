@@ -2,10 +2,10 @@
   "domain": "school_cycle_days",
   "name": "School Cycle Days",
   "codeowners": ["@gmalbert"],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/gmalbert/schoolCycleDays",
   "iot_class": "local_push",
   "requirements": ["holidays>=0.76,<1.0", "icalendar>=6.1,<7.0"],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
