@@ -233,6 +233,14 @@ GET /api/config
 
 The standalone app uses HA's configured timezone when constructing calendar query ranges.
 
+## Legacy Helper migration reads
+
+```http
+GET /api/states/<entity_id>
+```
+
+The one-click migration control reads the original School Cycle Days Helpers and copies useful values into SQLite. It does not modify the Helpers.
+
 ## Calendar discovery
 
 ```http
@@ -356,17 +364,24 @@ Do not preserve legacy bugs merely for parity.
 
 ## Phase 3 — seed standalone settings
 
-Enter the current production values in the standalone UI:
+Use the standalone UI button:
 
-- production calendar entity;
-- school-year range;
+```text
+Import legacy HA Helpers
+```
+
+It remotely reads the original Helper values and copies the following into SQLite when available:
+
+- school-year start/end;
 - Cycle Day 1–5 labels;
 - restart/starting day;
-- state;
-- non-school dates;
-- holiday data.
+- include-holidays/include-weekends toggles;
+- manual non-school dates;
+- stored legacy holiday dates.
 
-A later enhancement can automate importing these values from HA Helpers, but manual UI entry is acceptable during the first standalone validation because it is a one-time migration rather than ongoing maintenance.
+It does **not** alter, rename, or delete the HA Helpers.
+
+After import, manually choose the target HA calendar from the standalone calendar selector and review all imported values before creating events.
 
 ## Phase 4 — production calendar read-only verification
 
@@ -489,13 +504,14 @@ After the initial migration works, the highest-value improvements are:
 1. **Dry-run/preview regeneration** — show exactly what will be deleted/created before applying.
 2. **Automatic snow-day shift** — choose a snow day and have the app determine the correct cycle continuation automatically.
 3. **Calendar preview/table** — show generated schedule inside the standalone UI before pushing to HA.
-4. **Import existing HA Helper values** — one-click migration from the legacy configuration.
-5. **Audit log** — record each create/delete/regenerate operation locally.
-6. **Database backup/export** — simple JSON or SQLite backup from the UI.
-7. **Authentication for the standalone UI** if exposed outside a trusted LAN/VPN.
-8. **OAuth** if the app becomes generally distributed.
-9. **Health/status page** for HA connectivity and token permissions.
-10. **API tests against a disposable HA calendar** in CI or a local test HA instance.
+4. **Audit log** — record each create/delete/regenerate operation locally.
+5. **Database backup/export** — simple JSON or SQLite backup from the UI.
+6. **Authentication for the standalone UI** if exposed outside a trusted LAN/VPN.
+7. **OAuth** if the app becomes generally distributed.
+8. **Health/status page** for HA connectivity and token permissions.
+9. **API tests against a disposable HA calendar** in CI or a local test HA instance.
+
+The one-click **Import legacy HA Helpers** migration is already implemented and is no longer a future item.
 
 ---
 
