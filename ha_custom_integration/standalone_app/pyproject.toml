@@ -1,0 +1,28 @@
+[project]
+name = "school-cycle-days"
+version = "0.2.0"
+description = "Standalone School Cycle Days app with remote Home Assistant calendar integration"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1.0",
+  "uvicorn[standard]>=0.35,<1.0",
+  "httpx>=0.28,<1.0",
+  "websockets>=15,<16",
+  "jinja2>=3.1,<4.0",
+  "python-multipart>=0.0.20,<1.0",
+  "holidays>=0.76,<1.0",
+  "pydantic-settings>=2.10,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9.0",
+  "pytest-asyncio>=1.1,<2.0",
+  "ruff>=0.12,<1.0",
+]
+
+[tool.uvicorn]
+factory = false
+
+[tool.ruff]
+line-length = 100
