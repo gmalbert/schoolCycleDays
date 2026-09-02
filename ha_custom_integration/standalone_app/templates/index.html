@@ -28,6 +28,14 @@
   {% if message %}<div class="message">{{ message }}</div>{% endif %}
   {% if connection_error %}<div class="error"><strong>Home Assistant connection error:</strong> {{ connection_error }}</div>{% endif %}
 
+  <section class="card" style="margin-bottom:18px">
+    <h2>Migration from the old Home Assistant setup</h2>
+    <p>If the original School Cycle Days Helpers still exist in Home Assistant, this will copy the current school-year dates, five cycle labels, restart day, toggles, non-school dates, and stored holiday dates into the standalone database. It only reads the HA Helpers; it does not change or delete them.</p>
+    <form method="post" action="/migration/import-legacy-helpers">
+      <button type="submit">Import legacy HA Helpers</button>
+    </form>
+  </section>
+
   <div class="grid">
     <section class="card">
       <h2>School year & cycle</h2>
