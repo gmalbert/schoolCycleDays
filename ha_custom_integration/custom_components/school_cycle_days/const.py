@@ -18,7 +18,7 @@ CONF_ENTITIES = "entities"
 CONF_BUTTONS = "buttons"
 CONF_LEGACY_CALENDAR_STORAGE_PATH = "legacy_calendar_storage_path"
 
-PLATFORMS = ["button", "date", "number", "select", "sensor", "switch", "text"]
+PLATFORMS = ["button", "date", "number", "select", "switch", "text"]
 
 # Integration-owned UI settings. These are persisted by the manager and exposed
 # as native Home Assistant entities, so normal operation never requires YAML.
