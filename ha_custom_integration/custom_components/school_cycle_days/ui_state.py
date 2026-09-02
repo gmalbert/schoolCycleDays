@@ -32,19 +32,12 @@ UI_STORAGE_VERSION = 1
 class SchoolCycleDaysUIState:
     """Store values that users edit through native Home Assistant entities."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry_id: str,
-        *,
-        legacy_calendar_storage_path: str | None,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, *, legacy_calendar_storage_path: str | None) -> None:
         self.hass = hass
         self.entry_id = entry_id
         self.legacy_calendar_storage_path = legacy_calendar_storage_path
-        self.store: Store[dict[str, Any]] = Store(
-            hass, UI_STORAGE_VERSION, f"{DOMAIN}.ui.{entry_id}"
-        )
+        self.store: Store[dict[str, Any]] = Store(hass, UI_STORAGE_VERSION, f"{DOMAIN}.ui.{entry_id}")
+        self._calendar_names: list[str] = []
         today = dt_util.now().date()
         self.values: dict[str, Any] = {
             SETTING_START_DATE: today.isoformat(),
@@ -55,14 +48,10 @@ class SchoolCycleDaysUIState:
             SETTING_INCLUDE_WEEKENDS: False,
             SETTING_SELECTED_CALENDAR: "",
             SETTING_SELECTED_NON_SCHOOL_DAY: "",
-            **{
-                f"{SETTING_CYCLE_PREFIX}{index}": label
-                for index, label in enumerate(DEFAULT_CYCLE_DAYS, start=1)
-            },
+            **{f"{SETTING_CYCLE_PREFIX}{index}": label for index, label in enumerate(DEFAULT_CYCLE_DAYS, start=1)},
         }
 
     async def async_load(self) -> bool:
-        """Load UI state. Return True when native state already existed."""
         stored = await self.store.async_load()
         if isinstance(stored, dict):
             self.values.update(stored)
@@ -70,7 +59,6 @@ class SchoolCycleDaysUIState:
         return False
 
     async def async_seed_from_legacy(self, manager: Any) -> None:
-        """Seed first-run native controls from the user's existing HA helpers."""
         simple = {
             SETTING_START_DATE: manager.state("start_date"),
             SETTING_END_DATE: manager.state("end_date"),
@@ -99,7 +87,6 @@ class SchoolCycleDaysUIState:
             self.values[SETTING_INCLUDE_HOLIDAYS] = include_holidays == "on"
         if include_weekends:
             self.values[SETTING_INCLUDE_WEEKENDS] = include_weekends == "on"
-
         await self.store.async_save(self.values)
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -112,16 +99,23 @@ class SchoolCycleDaysUIState:
 
     @callback
     def cycle_days(self) -> list[str]:
-        return [
-            str(self.values.get(f"{SETTING_CYCLE_PREFIX}{index}", ""))
-            for index in range(1, 6)
-        ]
+        return [str(self.values.get(f"{SETTING_CYCLE_PREFIX}{index}", "")) for index in range(1, 6)]
 
+    @callback
     def calendar_names(self) -> list[str]:
-        """Return legacy Local Calendar names available for import/export."""
+        return list(self._calendar_names)
+
+    async def async_refresh_calendar_names(self) -> None:
         if not self.legacy_calendar_storage_path:
-            return []
-        root = Path(self.legacy_calendar_storage_path)
+            self._calendar_names = []
+        else:
+            self._calendar_names = await self.hass.async_add_executor_job(
+                self._scan_calendar_names, Path(self.legacy_calendar_storage_path)
+            )
+        async_dispatcher_send(self.hass, SIGNAL_UI_UPDATED, self.entry_id)
+
+    @staticmethod
+    def _scan_calendar_names(root: Path) -> list[str]:
         if not root.exists():
             return []
         names: list[str] = []
@@ -131,6 +125,6 @@ class SchoolCycleDaysUIState:
             name = path.stem
             for prefix in ("local_calendar.", "local_"):
                 if name.startswith(prefix):
-                    name = name[len(prefix) :]
+                    name = name[len(prefix):]
             names.append(name.replace("_", " ").title())
         return sorted(set(names))
