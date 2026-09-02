@@ -2,23 +2,25 @@
 
 This folder is a standalone Home Assistant-native port of the existing AppDaemon application. Nothing under the existing `apps/` tree is replaced or modified.
 
-The integration can be installed locally without HACS. HACS metadata is included so this folder can later become its own repository if desired.
+The design goal is now explicitly **UI-first**: after installation, routine configuration and school-calendar corrections should be possible entirely from Home Assistant's UI. Editing Python, YAML, service data, or `.ics` files is not part of the normal workflow.
 
-See [`APPDAEMON_COMPATIBILITY_AUDIT.md`](APPDAEMON_COMPATIBILITY_AUDIT.md) for the method-by-method port and helper/entity analysis.
+See [`APPDAEMON_COMPATIBILITY_AUDIT.md`](APPDAEMON_COMPATIBILITY_AUDIT.md) for the method-by-method AppDaemon compatibility review.
 
-## Why move away from AppDaemon
+## What this version changes
 
-The original app used Home Assistant helpers as configuration, persistence, commands, and status, then called Home Assistant back through REST with a bearer token to create calendar events.
+The original AppDaemon app used manually-created HA Helpers for configuration, commands, display state, and persistence. It also called HA back through REST with a bearer token.
 
-This version runs inside Home Assistant and therefore:
+This version:
 
-- reads HA state directly;
-- calls Home Assistant calendar APIs directly;
-- requires no bearer token or self-REST requests;
-- stores application data with Home Assistant `Store`;
-- can operate with **no legacy helper entities at all**;
-- keeps the existing helper/button IDs as optional compatibility fallbacks;
-- can delete individual calendar events and selectively replace generated cycle-day events instead of wiping the calendar.
+- runs inside Home Assistant;
+- installs through a normal **Config Flow** under Settings → Devices & services;
+- exposes native `date`, `text`, `number`, `switch`, `select`, and `button` entities;
+- persists native UI values with Home Assistant `Store`;
+- uses HA calendar APIs directly rather than REST calls back into HA;
+- supports targeted calendar-event deletion by UID;
+- can delete/rebuild only School Cycle Days events in a selected date range;
+- preserves the old Helper/button workflow as a compatibility layer during migration;
+- imports the current values of the old Helpers into the native UI on first setup when those Helpers exist.
 
 ## Folder layout
 
@@ -32,10 +34,22 @@ ha_custom_integration/
 └── custom_components/
     └── school_cycle_days/
         ├── __init__.py
+        ├── button.py
+        ├── config_flow.py
         ├── const.py
+        ├── date.py
+        ├── entity.py
         ├── manager.py
         ├── manifest.json
-        └── services.yaml
+        ├── number.py
+        ├── select.py
+        ├── services.yaml
+        ├── strings.json
+        ├── switch.py
+        ├── text.py
+        ├── translations/
+        │   └── en.json
+        └── ui_state.py
 ```
 
 ## Local installation
@@ -52,76 +66,266 @@ into:
 /config/custom_components/school_cycle_days/
 ```
 
-Restart Home Assistant after changing integration Python files.
+Restart Home Assistant.
 
-## Minimum configuration
+Then go to:
 
-```yaml
-school_cycle_days:
-  calendar_entity: calendar.school
+```text
+Settings → Devices & services → Add Integration → School Cycle Days
 ```
 
-For legacy JSON migration and direct Local Calendar ICS import/export/full-clear compatibility, optionally add:
+Choose:
 
-```yaml
-school_cycle_days:
-  calendar_entity: calendar.school
-  us_state: NH
-  legacy_calendar_storage_path: /config/.storage
+- the target Home Assistant calendar;
+- the US state code used for holiday generation;
+- optionally, the legacy Local Calendar storage path for old ICS import/export/recovery compatibility.
+
+No `configuration.yaml` entry is required for a new installation.
+
+## Existing YAML installations
+
+The transitional `school_cycle_days:` YAML configuration is still accepted. When HA loads it, the integration starts an import flow and converts it into a normal config entry.
+
+This is a migration path, not the intended long-term configuration method.
+
+## Native UI entities
+
+The integration creates its own Home Assistant device and UI controls.
+
+### Dates
+
+Expected entity names:
+
+```text
+date.school_cycle_days_school_year_start
+date.school_cycle_days_school_year_end
+date.school_cycle_days_non_school_day
 ```
 
-Normal calendar creation and **native selective event deletion do not require direct ICS-file access**.
+These let you change the school-year range and choose a date to add/remove/correct directly from the dashboard.
 
-## Do we still need the old helpers?
+### Cycle-day labels
 
-No. They are compatibility/UI conveniences, not integration dependencies.
-
-Native actions can now receive all operational values directly:
-
-```yaml
-action: school_cycle_days.create_cycle_days
-data:
-  start_date: "2026-09-01"
-  end_date: "2027-06-15"
-  cycle_days:
-    - Art
-    - Music
-    - Library
-    - PE
-    - STEM
-  day_number: 1
-  include_holidays: false
-  include_weekends: false
+```text
+text.school_cycle_days_cycle_day_1
+text.school_cycle_days_cycle_day_2
+text.school_cycle_days_cycle_day_3
+text.school_cycle_days_cycle_day_4
+text.school_cycle_days_cycle_day_5
 ```
 
-If a field is omitted, the integration falls back to the matching historical helper **if that helper exists**. This allows gradual migration.
+Changing Art/Music/Library/etc. no longer requires editing an AppDaemon file or manually maintaining `input_text` Helpers.
 
-### Helpers worth keeping temporarily
+### Starting cycle day
 
-For an interactive dashboard, these can still be convenient controls:
+```text
+number.school_cycle_days_starting_cycle_day
+```
 
-- `input_datetime.cycle_start_day`
-- `input_datetime.cycle_end_day`
-- `input_datetime.add_non_school_day`
-- `input_number.cycle_day_restart_day`
-- possibly `input_boolean.include_holidays_in_calendar`
-- possibly `input_boolean.include_weekends_in_calendar`
+This is constrained to 1–5 in the UI.
 
-### Strong candidates for removal
+### Calendar-generation options
 
-Once the dashboard uses native actions, these are no longer useful to the application itself:
+```text
+switch.school_cycle_days_include_no_school_weekdays
+switch.school_cycle_days_include_weekends
+```
 
-- `input_text.non_school_days` — replaced by HA Store + status sensor;
-- `input_text.cycle_day_holidays` — replaced by HA Store + status sensor;
-- `input_text.system_message` — replaced by `sensor.school_cycle_days_status`;
-- `input_text.current_calendar` — target calendar is already integration configuration;
-- most `input_button.*` helpers — dashboard buttons can call integration actions directly;
-- `input_select.calendar_list_for_selection` — not needed by the native workflow;
-- the five `input_text.cycle_day_1` through `_5` helpers if cycle labels are supplied directly/configured elsewhere.
+### Selects
 
-The exact compatibility inventory is in `APPDAEMON_COMPATIBILITY_AUDIT.md`.
+```text
+select.school_cycle_days_existing_non_school_day
+select.school_cycle_days_import_export_calendar
+```
 
-## Native Home Assistant actions
+The first is used to remove a stored non-school day. The second is used only for legacy Local Calendar ICS import/export compatibility.
+
+### Action buttons
+
+Expected native buttons include:
+
+```text
+button.school_cycle_days_add_non_school_day
+button.school_cycle_days_remove_selected_non_school_day
+button.school_cycle_days_clear_non_school_days
+button.school_cycle_days_load_holidays
+button.school_cycle_days_delete_holidays
+button.school_cycle_days_generate_cycle_days
+button.school_cycle_days_regenerate_selected_range
+button.school_cycle_days_delete_generated_events_on_selected_date
+button.school_cycle_days_refresh_calendar_list
+button.school_cycle_days_import_no_school_dates
+button.school_cycle_days_export_selected_calendar
+```
+
+The example dashboard at `examples/school_cycle_days_dashboard.yml` uses these native controls.
+
+## Normal UI workflow
+
+### Beginning of the school year
+
+1. Set **School year start**.
+2. Set **School year end**.
+3. Enter the five cycle-day labels.
+4. Set **Starting cycle day**.
+5. Load holidays if desired.
+6. Press **Generate cycle days**.
+
+No code or YAML is needed.
+
+### Snow day / newly discovered non-school day
+
+1. Set **Non-school day** to the affected date.
+2. Press **Add non-school day**.
+3. Change **School year start** to the first date whose generated cycle needs replacing, if necessary.
+4. Set **Starting cycle day** to the cycle day that should apply to the first eligible school day in that range.
+5. Press **Regenerate selected range**.
+
+The integration deletes only School Cycle Days events in that date range and rebuilds them. Unrelated events on the calendar are left alone.
+
+### Remove one generated calendar entry
+
+1. Set **Non-school day** to the date containing the generated event.
+2. Press **Delete generated events on selected date**.
+
+The integration queries the calendar for that date, gets the underlying UID, and calls the calendar entity's delete API. You do not have to know or enter the UID.
+
+## Calendar deletion
+
+Home Assistant's calendar entity API supports deletion through `async_delete_event(uid)`. The public automation service surface still does not expose a general `calendar.delete_event` action, but a custom integration running inside HA can call the calendar entity directly.
+
+The integration therefore exposes two levels of deletion:
+
+```text
+school_cycle_days.delete_event
+```
+
+Deletes exactly one known UID.
+
+```text
+school_cycle_days.delete_generated_events
+```
+
+Queries a date range, identifies events owned by School Cycle Days, obtains their UIDs, and deletes only those events.
+
+New events contain the marker:
+
+```text
+[school_cycle_days]
+```
+
+The migration logic also recognizes the `Day N (...)` and `No School` event shapes created by the old AppDaemon app.
+
+### Full calendar deletion
+
+`school_cycle_days.clear_calendar` remains only as a legacy/recovery operation for Local Calendar installations. It should not be used for normal reruns.
+
+## Persistence
+
+Two HA Store records are used:
+
+```text
+school_cycle_days.data
+school_cycle_days.ui.<config-entry-id>
+```
+
+The first stores application data:
+
+- manually-entered non-school dates;
+- holiday dates;
+- holiday names.
+
+The second stores the values edited with the native UI entities:
+
+- school-year start/end;
+- selected non-school date;
+- cycle-day labels;
+- restart day;
+- include-holidays/include-weekends toggles;
+- select choices.
+
+These survive HA restarts without requiring manually-created Helpers.
+
+## Migration from the existing Helpers
+
+The old Helpers remain supported as fallbacks and the old `input_button.*` entities remain listened to.
+
+On the first startup where no native UI Store exists, the integration reads the current values of these existing Helpers when available:
+
+```text
+input_datetime.cycle_start_day
+input_datetime.cycle_end_day
+input_datetime.add_non_school_day
+input_number.cycle_day_restart_day
+input_text.cycle_day_1
+input_text.cycle_day_2
+input_text.cycle_day_3
+input_text.cycle_day_4
+input_text.cycle_day_5
+input_boolean.include_holidays_in_calendar
+input_boolean.include_weekends_in_calendar
+input_select.calendar_list
+```
+
+Those values seed the native integration entities, so migration should not require re-entering the school-year setup.
+
+The original legacy buttons also remain supported:
+
+```text
+input_button.rerun_calendar_cycle_days
+input_button.cycle_day_list_holidays
+input_button.add_non_school_day
+input_button.clear_non_school_days
+input_button.delete_non_school_day
+input_button.delete_calendar_events
+input_button.delete_holidays
+input_button.add_dates_from_other_calendar
+input_button.refresh_calendar_list
+input_button.delete_and_rerun_calendar_cycle_days
+input_button.export_ics
+```
+
+Do not run AppDaemon and the native integration against the same legacy buttons/calendar simultaneously; both can respond to the same press.
+
+## Helpers that can eventually be removed
+
+Once your dashboard is using the native School Cycle Days entities, the old Helpers are no longer required by the application.
+
+That includes the old configuration controls:
+
+```text
+input_datetime.cycle_start_day
+input_datetime.cycle_end_day
+input_datetime.add_non_school_day
+input_number.cycle_day_restart_day
+input_text.cycle_day_1
+input_text.cycle_day_2
+input_text.cycle_day_3
+input_text.cycle_day_4
+input_text.cycle_day_5
+input_boolean.include_holidays_in_calendar
+input_boolean.include_weekends_in_calendar
+```
+
+and the old application-state/display Helpers:
+
+```text
+input_text.non_school_days
+input_text.cycle_day_holidays
+input_text.system_message
+input_text.current_calendar
+input_select.non_school_days
+input_select.calendar_list
+input_select.calendar_list_for_selection
+```
+
+as well as the old command `input_button.*` Helpers.
+
+Keep them until the native workflow has been tested on your HA instance; compatibility is deliberately retained so removal can be gradual.
+
+## Advanced Home Assistant actions
+
+The native buttons are intended for routine use, but the integration still exposes scriptable actions for automations and debugging:
 
 ```text
 school_cycle_days.create_cycle_days
@@ -139,152 +343,26 @@ school_cycle_days.clear_calendar
 school_cycle_days.export_ics
 ```
 
-## Calendar deletion — no more full-calendar reruns
-
-Home Assistant's calendar entity API supports event deletion internally. Local Calendar implements `async_delete_event(uid)` and advertises delete support even though HA does not currently expose a general `calendar.delete_event` automation action.
-
-Because this custom integration runs inside Home Assistant, it can call the calendar entity directly.
-
-### Delete one known event
-
-```yaml
-action: school_cycle_days.delete_event
-data:
-  uid: "EVENT-UID-HERE"
-```
-
-### Delete generated events on one day
-
-You do **not** need the UID for the common School Cycle Days case. Use the same date for both ends of the range:
-
-```yaml
-action: school_cycle_days.delete_generated_events
-data:
-  start_date: "2026-12-03"
-  end_date: "2026-12-03"
-```
-
-The integration queries the calendar entity, obtains the event UIDs internally, and deletes only events recognized as School Cycle Days events.
-
-### Replace only part of the calendar
-
-```yaml
-action: school_cycle_days.clear_and_rerun
-data:
-  start_date: "2026-12-03"
-  end_date: "2027-06-15"
-  cycle_days:
-    - Art
-    - Music
-    - Library
-    - PE
-    - STEM
-  day_number: 3
-  include_holidays: false
-  include_weekends: false
-```
-
-This now means:
-
-1. find generated School Cycle Days events from December 3 through June 15;
-2. delete only those events by UID;
-3. preserve unrelated events on the same calendar;
-4. regenerate only that date range.
-
-It **does not delete the calendar ICS file**.
-
-### How generated events are identified
-
-New events include an ownership marker in their description:
-
-```text
-[school_cycle_days]
-```
-
-For migration, selective deletion also recognizes the event shapes created by the old AppDaemon version:
-
-- summaries beginning with `Day ` and ending in the cycle description; and
-- `No School` events whose description is `Holiday` or `Weekend`.
-
-That means selective rerun can clean up old AppDaemon-generated events as well as new ones.
-
-### `clear_calendar` is now recovery-only
-
-`school_cycle_days.clear_calendar` retains the old destructive Local Calendar ICS-file deletion behavior solely as a compatibility/recovery tool.
-
-It should not be part of the normal dashboard workflow.
-
-## Persistence
-
-The AppDaemon version used `school_cycle_days.json` because its custom entity attributes were not durable across HA restarts.
-
-The native integration uses Home Assistant's `Store` helper with key:
-
-```text
-school_cycle_days.data
-```
-
-It stores:
-
-- manually added non-school days;
-- holiday dates;
-- holiday names.
-
-If there is no native store yet and `legacy_calendar_storage_path` is configured, startup imports the old `school_cycle_days.json`. The old file is not modified or deleted.
-
-## Status entities
-
-The first port publishes:
-
-```text
-sensor.school_cycle_days_non_school_days
-sensor.school_cycle_days_holidays
-sensor.school_cycle_days_status
-```
-
-The list sensors expose the stored values as attributes. These replace using `input_text` attributes as an application database.
-
-A later cleanup can convert these runtime states into proper entity-registry-backed `SensorEntity` objects.
-
-## Existing AppDaemon button compatibility
-
-The original functioning input-button names remain supported so the old dashboard can be used during migration, including:
-
-```text
-input_button.rerun_calendar_cycle_days
-input_button.cycle_day_list_holidays
-input_button.add_non_school_day
-input_button.clear_non_school_days
-input_button.delete_non_school_day
-input_button.delete_calendar_events
-input_button.delete_holidays
-input_button.add_dates_from_other_calendar
-input_button.refresh_calendar_list
-input_button.delete_and_rerun_calendar_cycle_days
-input_button.export_ics
-```
-
-`input_button.export_ics` was referenced by `createDate.py` even though it was missing from the checked-in `apps.yaml`; the native port includes it.
-
-The old `changeDefaultCalendar()` handler was not treated as supported functionality because it simply executed an undefined `test` name and its button was not configured in `apps.yaml`.
-
-## HACS later
-
-For local use, HACS is unnecessary. If this becomes its own repository later, the contents of `ha_custom_integration/` are already arranged to become the repository root.
-
 ## Recommended migration/test sequence
 
 1. Back up Home Assistant.
-2. Copy `custom_components/school_cycle_days` to `/config/custom_components/`.
-3. Configure a disposable Local Calendar first.
-4. Restart HA and verify `sensor.school_cycle_days_status`.
-5. Test `add_non_school_day` and `delete_non_school_day` using direct action data.
-6. Test a 2–3 day `create_cycle_days` range.
-7. Test `delete_generated_events` for a single generated date.
-8. Add an unrelated manual event to the test calendar and verify `clear_and_rerun` leaves it intact.
-9. Verify an old-style AppDaemon `Day N (...)` event can be found/deleted by selective deletion.
-10. Only then point the integration at the production school calendar.
-11. Migrate dashboard buttons from `input_button.*` helpers to direct actions.
-12. Remove obsolete helper entities after nothing references them.
+2. Copy the integration into `/config/custom_components/school_cycle_days/`.
+3. Restart HA.
+4. Add **School Cycle Days** from Settings → Devices & services.
+5. Initially select a disposable/test Local Calendar.
+6. Confirm the integration device exposes the native Date/Text/Number/Switch/Select/Button entities.
+7. Verify the date/cycle values were seeded from your old Helpers.
+8. Test adding and removing one non-school day from the UI.
+9. Generate a short 2–3 day range.
+10. Delete one generated date using the native delete button.
+11. Add an unrelated manual event to the test calendar and verify **Regenerate selected range** leaves it untouched.
+12. Point the integration at the production school calendar through **Configure**.
+13. Move your dashboard to the native entities.
+14. Disable the AppDaemon app.
+15. Remove obsolete Helpers only after nothing references them.
 
-Do not run AppDaemon and the native integration against the same legacy buttons/calendar simultaneously, because both can respond to a button press.
+## Local vs HACS use
+
+For your own installation, HACS is not required. Copying the `custom_components/school_cycle_days` directory into HA is sufficient.
+
+If the integration later becomes its own repository, the contents of `ha_custom_integration/` are already arranged to become that repository's root.
