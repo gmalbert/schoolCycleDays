@@ -70,6 +70,8 @@ class ScheduleService:
             with self.database._connect() as c:c.execute("UPDATE calendar_profiles SET school_year_start=?,school_year_end=?,starting_cycle_day=?,us_state=? WHERE id=?",(legacy.get("school_year_start",""),legacy.get("school_year_end",""),legacy.get("starting_cycle_day",1),legacy.get("us_state","NH"),p["id"]))
             self.database.set_cycles(p["id"],[legacy.get(f"cycle_day_{i}",f"Day {i}") for i in range(1,6)])
             for r in self.database.list_non_school_days(): self.database.add_profile_non_school(p["id"],r["day"],r["source"])
+            with self.database._connect() as c:
+                for r in self.database.list_holidays(): c.execute("INSERT INTO profile_holidays(profile_id,day,name) VALUES(?,?,?) ON CONFLICT(profile_id,day) DO UPDATE SET name=excluded.name",(p["id"],r["day"],r["name"]))
         summary=self.rebuild_profile("school"); rows=self.database.profile_schedule(p["id"]); self.database.replace_schedule([{k:r[k] for k in ("day","kind","cycle_day","title","detail","source")} for r in rows]); return summary
     def rows(self,start:date|None=None,end:date|None=None,profile="school"):
         p=self._profile(profile); return self.database.profile_schedule(p["id"],start.isoformat() if start else None,end.isoformat() if end else None)
