@@ -25,6 +25,7 @@ def publish_discovery_and_state(settings: Settings, schedule: ScheduleService) -
         client.username_pw_set(settings.mqtt_username, settings.mqtt_password or None)
     client.connect(settings.mqtt_host, settings.mqtt_port, keepalive=30)
     client.loop_start()
+    pending = []
     try:
         device = {
             "identifiers": ["school_cycle_days"],
@@ -48,9 +49,7 @@ def publish_discovery_and_state(settings: Settings, schedule: ScheduleService) -
         for key, payload in entities.items():
             state_topic = f"{settings.mqtt_base_topic}/{key}"
             object_id = f"school_cycle_days_{key}"
-            discovery_topic = (
-                f"{settings.mqtt_discovery_prefix}/sensor/{object_id}/config"
-            )
+            discovery_topic = f"{settings.mqtt_discovery_prefix}/sensor/{object_id}/config"
             config = {
                 "name": key.replace("_", " ").title(),
                 "unique_id": object_id,
@@ -60,8 +59,11 @@ def publish_discovery_and_state(settings: Settings, schedule: ScheduleService) -
                 "device": device,
                 "icon": "mdi:calendar-school",
             }
-            client.publish(discovery_topic, json.dumps(config), qos=1, retain=True)
-            client.publish(state_topic, json.dumps(payload), qos=1, retain=True)
+            pending.append(client.publish(discovery_topic, json.dumps(config), qos=1, retain=True))
+            pending.append(client.publish(state_topic, json.dumps(payload), qos=1, retain=True))
+
+        for message in pending:
+            message.wait_for_publish(timeout=5)
     finally:
-        client.loop_stop()
         client.disconnect()
+        client.loop_stop()
