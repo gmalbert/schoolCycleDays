@@ -6,13 +6,14 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
 from .database import Database
 from .ha_client import HomeAssistantClient
+from .ics_import import clean_no_school_calendar
 from .service import SchoolCycleDaysService
 
 runtime = get_settings()
@@ -24,6 +25,8 @@ service = SchoolCycleDaysService(database, ha)
 
 app = FastAPI(title="School Cycle Days", version="0.2.0")
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+MAX_ICS_BYTES = 5 * 1024 * 1024
 
 
 def redirect(message: str) -> RedirectResponse:
@@ -68,6 +71,49 @@ async def import_legacy_helpers():
         f"{result['settings']} settings, "
         f"{result['non_school_days']} non-school dates, "
         f"{result['holidays']} holiday dates."
+    )
+
+
+@app.post("/ics/process")
+async def process_ics(
+    calendar_file: UploadFile = File(...),
+    mode: str = Form("import"),
+):
+    """Clean an uploaded ICS and either import its No School dates or download it."""
+    filename = Path(calendar_file.filename or "calendar.ics").name
+    if not filename.lower().endswith(".ics"):
+        return redirect("Please upload a .ics calendar file.")
+
+    raw = await calendar_file.read(MAX_ICS_BYTES + 1)
+    if len(raw) > MAX_ICS_BYTES:
+        return redirect("ICS file is larger than the 5 MB upload limit.")
+
+    result = clean_no_school_calendar(raw)
+    if not result.events:
+        return redirect("No events whose summary starts with 'No School' were found.")
+
+    if mode == "download":
+        clean_name = f"{Path(filename).stem}_no_school_clean.ics"
+        return Response(
+            content=result.clean_ics,
+            media_type="text/calendar; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{clean_name}"'},
+        )
+
+    existing = {row["day"] for row in database.list_non_school_days()}
+    imported = 0
+    for imported_date in result.dates:
+        iso = imported_date.isoformat()
+        if iso in existing:
+            continue
+        database.add_non_school_day(iso, source=f"ics:{filename}")
+        existing.add(iso)
+        imported += 1
+
+    repair_note = " The final VEVENT was repaired." if result.repaired_final_event else ""
+    return redirect(
+        f"Found {len(result.events)} No School event(s) covering {len(result.dates)} date(s); "
+        f"imported {imported} new non-school date(s).{repair_note}"
     )
 
 
