@@ -4,23 +4,38 @@ from __future__ import annotations
 
 DOMAIN = "school_cycle_days"
 STORAGE_KEY = f"{DOMAIN}.data"
-STORAGE_VERSION = 1
+STORAGE_VERSION = 2
 
 DEFAULT_NAME = "School Cycle Days"
 DEFAULT_CALENDAR_ENTITY = "calendar.school"
-DEFAULT_STATE = "ready"
+DEFAULT_US_STATE = "NH"
 
 CONF_NAME = "name"
 CONF_CALENDAR_ENTITY = "calendar_entity"
 CONF_STORAGE_PATH = "storage_path"
 CONF_US_STATE = "us_state"
 CONF_ENTITIES = "entities"
+CONF_BUTTONS = "buttons"
+CONF_LEGACY_CALENDAR_STORAGE_PATH = "legacy_calendar_storage_path"
 
-DEFAULT_US_STATE = "NH"
+PLATFORMS = ["button", "date", "number", "select", "sensor", "switch", "text"]
 
-# These are compatibility defaults for the helper-driven AppDaemon UI. None of
-# them is required by the native integration when service/action parameters are
-# supplied directly.
+# Integration-owned UI settings. These are persisted by the manager and exposed
+# as native Home Assistant entities, so normal operation never requires YAML.
+SETTING_START_DATE = "start_date"
+SETTING_END_DATE = "end_date"
+SETTING_ADDED_DATE = "added_date"
+SETTING_DAY_NUMBER = "day_number"
+SETTING_INCLUDE_HOLIDAYS = "include_holidays"
+SETTING_INCLUDE_WEEKENDS = "include_weekends"
+SETTING_SELECTED_CALENDAR = "selected_calendar"
+SETTING_SELECTED_NON_SCHOOL_DAY = "selected_non_school_day"
+SETTING_CYCLE_PREFIX = "cycle_day_"
+
+DEFAULT_CYCLE_DAYS = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"]
+
+# Compatibility defaults for the helper-driven AppDaemon UI. None is required
+# by the native integration; they are fallback inputs/listeners only.
 ENTITY_KEYS = {
     "non_school_days": "input_text.non_school_days",
     "added_date": "input_datetime.add_non_school_day",
@@ -53,7 +68,5 @@ BUTTON_ENTITY_KEYS = {
     "add_dates_from_other_calendar": "input_button.add_dates_from_other_calendar",
     "refresh_calendar_list": "input_button.refresh_calendar_list",
     "delete_and_rerun": "input_button.delete_and_rerun_calendar_cycle_days",
-    # Referenced by createDate.py but omitted from the checked-in apps.yaml.
-    # Keep the conventional entity id so existing local installations can use it.
     "export_ics": "input_button.export_ics",
 }
