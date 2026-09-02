@@ -135,8 +135,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: config_entries.ConfigEnt
         entry.entry_id,
         legacy_calendar_storage_path=config.get(CONF_LEGACY_CALENDAR_STORAGE_PATH),
     )
-    await ui_state.async_load()
+
+    native_state_exists = await ui_state.async_load()
     await manager.async_initialize()
+    if not native_state_exists:
+        await ui_state.async_seed_from_legacy(manager)
 
     runtime: dict[str, Any] = {"manager": manager, "ui": ui_state, "unsubs": []}
     hass.data[DOMAIN][entry.entry_id] = runtime
