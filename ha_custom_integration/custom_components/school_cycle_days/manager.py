@@ -1,20 +1,20 @@
 """Runtime manager for School Cycle Days.
 
-This module contains the application logic that previously lived in AppDaemon.
-It runs inside Home Assistant and therefore reads entity state directly from
-``hass.states`` and calls Home Assistant services directly rather than making
-REST requests back into the same Home Assistant instance.
+The original project ran in AppDaemon and used Home Assistant helpers as both
+configuration and application state. This manager runs inside Home Assistant.
+Native services/actions can provide all runtime inputs directly; the historical
+helpers remain optional fallbacks so an existing dashboard can continue to work
+while it is migrated.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import holidays
 from icalendar import Calendar
@@ -22,7 +22,7 @@ from icalendar import Calendar
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .const import STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class SchoolCycleDaysManager:
         }
 
     async def async_initialize(self) -> None:
-        """Load persisted data and publish initial HA state."""
+        """Load persisted data and initialize compatibility helpers."""
         stored = await self.store.async_load()
         if isinstance(stored, dict):
             self.data.update(stored)
@@ -67,7 +67,7 @@ class SchoolCycleDaysManager:
         await self._async_message("School Cycle Days is ready.")
 
     def state(self, key: str, default: str = "") -> str:
-        """Return the state for a configured Home Assistant entity."""
+        """Return a configured helper state, if that helper exists."""
         entity_id = self.entities.get(key)
         if not entity_id:
             return default
@@ -77,7 +77,7 @@ class SchoolCycleDaysManager:
         return state.state
 
     async def async_handle_button(self, action: str) -> None:
-        """Dispatch one of the optional legacy helper buttons."""
+        """Dispatch an optional legacy input_button."""
         handlers = {
             "rerun": self.async_create_cycle_days,
             "list_holidays": self.async_load_holidays,
@@ -89,6 +89,7 @@ class SchoolCycleDaysManager:
             "add_dates_from_other_calendar": self.async_add_dates_from_other_calendar,
             "refresh_calendar_list": self.async_refresh_calendar_list,
             "delete_and_rerun": self.async_clear_and_rerun,
+            "export_ics": self.async_export_ics,
         }
         handler = handlers.get(action)
         if handler is None:
@@ -96,16 +97,21 @@ class SchoolCycleDaysManager:
             return
         try:
             await handler()
-        except Exception:  # noqa: BLE001 - surface failures in HA and logs
+        except Exception:  # noqa: BLE001
             _LOGGER.exception("School Cycle Days action failed: %s", action)
             await self._async_message(f"School Cycle Days action failed: {action}")
 
-    async def async_add_non_school_day(self) -> None:
-        raw = self.state("added_date")
-        if not raw:
+    async def async_add_non_school_day(self, day: str | None = None) -> None:
+        """Add one non-school day.
+
+        ``day`` is YYYY-MM-DD or MM/DD/YYYY. If omitted, fall back to the
+        historical input_datetime.add_non_school_day helper.
+        """
+        raw = day or self.state("added_date")
+        formatted = self._normalize_date(raw)
+        if not formatted:
             await self._async_message("No date selected.")
             return
-        formatted = datetime.strptime(raw, "%Y-%m-%d").strftime("%m/%d/%Y")
         days = set(self.data.get("non_school_days", []))
         if formatted in days:
             await self._async_message("This date already exists.")
@@ -115,8 +121,9 @@ class SchoolCycleDaysManager:
         await self._async_save_and_publish()
         await self._async_message(f"{formatted} added as a non-school day.")
 
-    async def async_delete_non_school_day(self) -> None:
-        selected = self.state("non_school_days_dropdown")
+    async def async_delete_non_school_day(self, day: str | None = None) -> None:
+        """Delete one stored non-school day."""
+        selected = self._normalize_date(day) if day else self.state("non_school_days_dropdown")
         days = list(self.data.get("non_school_days", []))
         if not selected or selected == "None" or selected not in days:
             await self._async_message("Select a non-school day to delete.")
@@ -131,12 +138,14 @@ class SchoolCycleDaysManager:
         await self._async_save_and_publish()
         await self._async_message("Non-school days have been deleted.")
 
-    async def async_load_holidays(self) -> None:
-        start_raw = self.state("start_date")
-        if not start_raw:
+    async def async_load_holidays(self, start_date: str | None = None) -> None:
+        """Load US holidays for the start year and following calendar year."""
+        start_raw = start_date or self.state("start_date")
+        normalized = self._date_object(start_raw)
+        if normalized is None:
             await self._async_message("Set the school-year start date first.")
             return
-        start_year = datetime.strptime(start_raw, "%Y-%m-%d").year
+        start_year = normalized.year
         holiday_data = holidays.US(state=self.us_state, years={start_year, start_year + 1})
         holiday_dates = [day.strftime("%m/%d/%Y") for day in holiday_data]
         holiday_names = sorted(set(str(name) for name in holiday_data.values()))
@@ -153,39 +162,57 @@ class SchoolCycleDaysManager:
         await self._async_save_and_publish()
         await self._async_message("All holidays have been deleted.")
 
-    async def async_create_cycle_days(self) -> None:
-        start_raw = self.state("start_date")
-        end_raw = self.state("end_date")
-        if not start_raw or not end_raw:
+    async def async_create_cycle_days(
+        self,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        cycle_days: list[str] | None = None,
+        day_number: int | None = None,
+        include_holidays: bool | None = None,
+        include_weekends: bool | None = None,
+    ) -> None:
+        """Create cycle-day events.
+
+        Every parameter is optional for backward compatibility. Missing values
+        are read from the original HA helpers.
+        """
+        start = self._date_object(start_date or self.state("start_date"))
+        end = self._date_object(end_date or self.state("end_date"))
+        if start is None or end is None:
             await self._async_message("Set both start and end dates.")
             return
-
-        start = datetime.strptime(start_raw, "%Y-%m-%d").date()
-        end = datetime.strptime(end_raw, "%Y-%m-%d").date()
         if end < start:
             await self._async_message("End date must not be before start date.")
             return
 
-        cycle_days = [self.state(f"cycle_day_{n}") for n in range(1, 6)]
-        if any(not value for value in cycle_days):
-            await self._async_message("Configure all five cycle-day descriptions first.")
+        values = cycle_days or [self.state(f"cycle_day_{n}") for n in range(1, 6)]
+        if len(values) != 5 or any(not value for value in values):
+            await self._async_message("Provide all five cycle-day descriptions.")
             return
 
-        day_number = int(float(self.state("day_number", "1") or "1"))
+        if day_number is None:
+            try:
+                day_number = int(float(self.state("day_number", "1") or "1"))
+            except ValueError:
+                day_number = 1
         if day_number < 1 or day_number > 5:
             day_number = 1
 
+        if include_holidays is None:
+            include_holidays = self.state("include_holidays_in_calendar") == "on"
+        if include_weekends is None:
+            include_weekends = self.state("include_weekends_in_calendar") == "on"
+
         blocked = set(self.data.get("non_school_days", []))
         blocked.update(self.data.get("holiday_dates", []))
-        include_holidays = self.state("include_holidays_in_calendar") == "on"
-        include_weekends = self.state("include_weekends_in_calendar") == "on"
 
         school_days = non_school_days = weekend_days = 0
         current = start
         while current <= end:
             formatted = current.strftime("%m/%d/%Y")
             if current.weekday() < 5 and formatted not in blocked:
-                description = cycle_days[day_number - 1]
+                description = values[day_number - 1]
                 await self._async_create_calendar_event(
                     current,
                     f"Day {day_number} ({description})",
@@ -208,20 +235,27 @@ class SchoolCycleDaysManager:
             f"Weekend Days: {weekend_days}."
         )
 
-    async def async_add_dates_from_other_calendar(self) -> None:
-        """Import 'No School' events from a local-calendar ICS file.
-
-        This keeps compatibility with the original AppDaemon workflow. It only
-        applies when ``legacy_calendar_storage_path`` points at HA's Local
-        Calendar storage directory.
-        """
+    async def async_add_dates_from_other_calendar(
+        self,
+        *,
+        calendar_name: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> None:
+        """Import events containing 'No School' from a local-calendar ICS file."""
         if not self.legacy_calendar_storage_path:
             await self._async_message("Legacy calendar storage path is not configured.")
             return
 
-        friendly_name = self.state("calendar_list")
+        friendly_name = calendar_name or self.state("calendar_list")
         if not friendly_name:
             await self._async_message("Select a calendar first.")
+            return
+
+        start = self._date_object(start_date or self.state("start_date"))
+        end = self._date_object(end_date or self.state("end_date"))
+        if start is None or end is None:
+            await self._async_message("Set both start and end dates.")
             return
 
         path = self._legacy_calendar_file(friendly_name)
@@ -229,8 +263,6 @@ class SchoolCycleDaysManager:
             await self._async_message(f"Calendar file not found: {path.name}")
             return
 
-        start = datetime.strptime(self.state("start_date"), "%Y-%m-%d").date()
-        end = datetime.strptime(self.state("end_date"), "%Y-%m-%d").date()
         imported = await self.hass.async_add_executor_job(
             self._read_no_school_dates, path, start, end
         )
@@ -244,6 +276,7 @@ class SchoolCycleDaysManager:
         )
 
     async def async_refresh_calendar_list(self) -> None:
+        """Refresh legacy input_select calendar lists if configured/present."""
         if not self.legacy_calendar_storage_path:
             return
         root = Path(self.legacy_calendar_storage_path)
@@ -254,7 +287,7 @@ class SchoolCycleDaysManager:
         await self._async_set_select_options("calendar_list_for_selection", names)
 
     async def async_clear_calendar(self) -> None:
-        """Clear the selected Local Calendar using the legacy file fallback."""
+        """Clear the target Local Calendar using the historical file fallback."""
         if not self.legacy_calendar_storage_path:
             await self._async_message(
                 "Calendar clearing requires legacy_calendar_storage_path."
@@ -273,23 +306,26 @@ class SchoolCycleDaysManager:
         )
         await self._async_message("All calendar events have been removed.")
 
-    async def async_clear_and_rerun(self) -> None:
+    async def async_clear_and_rerun(self, **kwargs: Any) -> None:
         await self.async_clear_calendar()
-        await self.async_create_cycle_days()
+        await self.async_create_cycle_days(**kwargs)
 
-    async def async_export_ics(self) -> None:
+    async def async_export_ics(self, calendar_name: str | None = None) -> None:
+        """Export one Local Calendar ICS file to /config/www."""
         if not self.legacy_calendar_storage_path:
             await self._async_message("Legacy calendar storage path is not configured.")
             return
-        selected = self.state("calendar_list")
+        selected = calendar_name or self.state("calendar_list")
         if not selected:
             await self._async_message("Select a calendar first.")
             return
         source = self._legacy_calendar_file(selected)
-        destination = Path(self.hass.config.path("www")) / source.name
+        destination_dir = Path(self.hass.config.path("www"))
+        destination = destination_dir / source.name
         if not source.exists():
             await self._async_message(f"Calendar file not found: {source.name}")
             return
+        await self.hass.async_add_executor_job(destination_dir.mkdir, parents=True, exist_ok=True)
         await self.hass.async_add_executor_job(shutil.copyfile, source, destination)
         await self._async_message(f"Exported {selected} to /local/{source.name}")
 
@@ -314,6 +350,7 @@ class SchoolCycleDaysManager:
         await self._async_publish_state()
 
     async def _async_publish_state(self) -> None:
+        """Publish read-only compatibility/status sensors and optional select options."""
         non_school_days = list(self.data.get("non_school_days", []))
         holiday_dates = list(self.data.get("holiday_dates", []))
         holiday_names = list(self.data.get("holiday_names", []))
@@ -345,7 +382,7 @@ class SchoolCycleDaysManager:
 
     async def _async_set_select_options(self, key: str, options: list[str]) -> None:
         entity_id = self.entities.get(key)
-        if not entity_id:
+        if not entity_id or self.hass.states.get(entity_id) is None:
             return
         await self.hass.services.async_call(
             "input_select",
@@ -400,6 +437,27 @@ class SchoolCycleDaysManager:
         _LOGGER.info("Imported legacy school_cycle_days.json into Home Assistant Store")
 
     @staticmethod
+    def _normalize_date(value: str | None) -> str | None:
+        parsed = SchoolCycleDaysManager._date_object(value)
+        return parsed.strftime("%m/%d/%Y") if parsed else None
+
+    @staticmethod
+    def _date_object(value: str | date | datetime | None) -> date | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        text = str(value).strip()
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(text, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    @staticmethod
     def _normalize_legacy_list(value: Any) -> list[str]:
         if value in (None, "", [], [[]]):
             return []
@@ -414,9 +472,13 @@ class SchoolCycleDaysManager:
         return [str(value)]
 
     @staticmethod
-    def _sort_dates(values: Any) -> list[str]:
-        unique = {str(value) for value in values if value and str(value) != "None"}
-        return sorted(unique, key=lambda value: datetime.strptime(value, "%m/%d/%Y"))
+    def _sort_dates(values: Iterable[Any]) -> list[str]:
+        normalized = {
+            parsed
+            for value in values
+            if (parsed := SchoolCycleDaysManager._normalize_date(str(value))) is not None
+        }
+        return sorted(normalized, key=lambda value: datetime.strptime(value, "%m/%d/%Y"))
 
     @staticmethod
     def _calendar_names(root: Path) -> list[str]:
@@ -462,7 +524,7 @@ class SchoolCycleDaysManager:
             end_value = event.decoded("DTEND")
             event_start = start_value.date() if isinstance(start_value, datetime) else start_value
             event_end = end_value.date() if isinstance(end_value, datetime) else end_value
-            event_end -= timedelta(days=1)  # RFC5545 all-day DTEND is exclusive.
+            event_end -= timedelta(days=1)
             current = event_start
             while current <= event_end:
                 if start <= current <= end:
