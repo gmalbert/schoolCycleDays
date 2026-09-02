@@ -18,6 +18,9 @@ CONF_ENTITIES = "entities"
 
 DEFAULT_US_STATE = "NH"
 
+# These are compatibility defaults for the helper-driven AppDaemon UI. None of
+# them is required by the native integration when service/action parameters are
+# supplied directly.
 ENTITY_KEYS = {
     "non_school_days": "input_text.non_school_days",
     "added_date": "input_datetime.add_non_school_day",
@@ -50,4 +53,7 @@ BUTTON_ENTITY_KEYS = {
     "add_dates_from_other_calendar": "input_button.add_dates_from_other_calendar",
     "refresh_calendar_list": "input_button.refresh_calendar_list",
     "delete_and_rerun": "input_button.delete_and_rerun_calendar_cycle_days",
+    # Referenced by createDate.py but omitted from the checked-in apps.yaml.
+    # Keep the conventional entity id so existing local installations can use it.
+    "export_ics": "input_button.export_ics",
 }
