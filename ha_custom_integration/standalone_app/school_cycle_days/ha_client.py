@@ -37,33 +37,30 @@ class HomeAssistantClient:
             return "ws://" + self.base_url.removeprefix("http://") + "/api/websocket"
         raise HomeAssistantError("Home Assistant URL must begin with http:// or https://")
 
-    async def test_connection(self) -> dict[str, Any]:
-        async with httpx.AsyncClient(verify=self.verify_ssl, timeout=15) as client:
-            response = await client.get(f"{self.base_url}/api/", headers=self._headers)
-            response.raise_for_status()
-            return response.json()
-
-    async def calendars(self) -> list[dict[str, str]]:
-        async with httpx.AsyncClient(verify=self.verify_ssl, timeout=20) as client:
+    async def _get_json(self, path: str, *, params: dict[str, str] | None = None) -> Any:
+        async with httpx.AsyncClient(verify=self.verify_ssl, timeout=30) as client:
             response = await client.get(
-                f"{self.base_url}/api/calendars", headers=self._headers
+                f"{self.base_url}{path}", headers=self._headers, params=params
             )
             response.raise_for_status()
             return response.json()
+
+    async def test_connection(self) -> dict[str, Any]:
+        return await self._get_json("/api/")
+
+    async def config(self) -> dict[str, Any]:
+        return await self._get_json("/api/config")
+
+    async def calendars(self) -> list[dict[str, str]]:
+        return await self._get_json("/api/calendars")
 
     async def events(
         self, entity_id: str, start: str, end: str
     ) -> list[dict[str, Any]]:
         encoded = quote(entity_id, safe=".")
-        params = {"start": start, "end": end}
-        async with httpx.AsyncClient(verify=self.verify_ssl, timeout=30) as client:
-            response = await client.get(
-                f"{self.base_url}/api/calendars/{encoded}",
-                headers=self._headers,
-                params=params,
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._get_json(
+            f"/api/calendars/{encoded}", params={"start": start, "end": end}
+        )
 
     async def create_event(
         self,
