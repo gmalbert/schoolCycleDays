@@ -140,6 +140,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: config_entries.ConfigEnt
     await manager.async_initialize()
     if not native_state_exists:
         await ui_state.async_seed_from_legacy(manager)
+    await ui_state.async_refresh_calendar_names()
 
     runtime: dict[str, Any] = {"manager": manager, "ui": ui_state, "unsubs": []}
     hass.data[DOMAIN][entry.entry_id] = runtime
