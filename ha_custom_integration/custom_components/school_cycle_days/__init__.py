@@ -7,7 +7,6 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.const import CONF_ENTITY_ID
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_state_change_event
@@ -47,18 +46,39 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
-SERVICE_HANDLERS = {
-    "create_cycle_days": "async_create_cycle_days",
-    "load_holidays": "async_load_holidays",
-    "add_non_school_day": "async_add_non_school_day",
-    "delete_non_school_day": "async_delete_non_school_day",
-    "clear_non_school_days": "async_clear_non_school_days",
-    "delete_holidays": "async_delete_holidays",
-    "add_dates_from_other_calendar": "async_add_dates_from_other_calendar",
-    "refresh_calendar_list": "async_refresh_calendar_list",
-    "clear_calendar": "async_clear_calendar",
-    "clear_and_rerun": "async_clear_and_rerun",
-    "export_ics": "async_export_ics",
+CREATE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("start_date"): cv.string,
+        vol.Optional("end_date"): cv.string,
+        vol.Optional("cycle_days"): vol.All([cv.string], vol.Length(min=5, max=5)),
+        vol.Optional("day_number"): vol.All(vol.Coerce(int), vol.Range(min=1, max=5)),
+        vol.Optional("include_holidays"): cv.boolean,
+        vol.Optional("include_weekends"): cv.boolean,
+    }
+)
+DATE_SCHEMA = vol.Schema({vol.Optional("day"): cv.string})
+HOLIDAY_SCHEMA = vol.Schema({vol.Optional("start_date"): cv.string})
+CALENDAR_IMPORT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("calendar_name"): cv.string,
+        vol.Optional("start_date"): cv.string,
+        vol.Optional("end_date"): cv.string,
+    }
+)
+CALENDAR_NAME_SCHEMA = vol.Schema({vol.Optional("calendar_name"): cv.string})
+
+SERVICE_DEFINITIONS: dict[str, tuple[str, vol.Schema | None]] = {
+    "create_cycle_days": ("async_create_cycle_days", CREATE_SCHEMA),
+    "load_holidays": ("async_load_holidays", HOLIDAY_SCHEMA),
+    "add_non_school_day": ("async_add_non_school_day", DATE_SCHEMA),
+    "delete_non_school_day": ("async_delete_non_school_day", DATE_SCHEMA),
+    "clear_non_school_days": ("async_clear_non_school_days", None),
+    "delete_holidays": ("async_delete_holidays", None),
+    "add_dates_from_other_calendar": ("async_add_dates_from_other_calendar", CALENDAR_IMPORT_SCHEMA),
+    "refresh_calendar_list": ("async_refresh_calendar_list", None),
+    "clear_calendar": ("async_clear_calendar", None),
+    "clear_and_rerun": ("async_clear_and_rerun", CREATE_SCHEMA),
+    "export_ics": ("async_export_ics", CALENDAR_NAME_SCHEMA),
 }
 
 
@@ -68,6 +88,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     if raw_config is None:
         return True
 
+    # Defaults retain the exact helper ids from the AppDaemon app, but the
+    # manager only uses a helper when a native service call omits that value.
     entities = {**ENTITY_KEYS, **raw_config.get(CONF_ENTITIES, {})}
     buttons = {**BUTTON_ENTITY_KEYS, **raw_config.get(CONF_BUTTONS, {})}
 
@@ -92,24 +114,28 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 def _register_services(hass: HomeAssistant, manager: SchoolCycleDaysManager) -> None:
     """Expose application operations as Home Assistant actions."""
 
-    for service_name, method_name in SERVICE_HANDLERS.items():
+    for service_name, (method_name, schema) in SERVICE_DEFINITIONS.items():
 
         async def _handle_service(
             call: ServiceCall,
             *,
             method_name: str = method_name,
         ) -> None:
-            del call
             method = getattr(manager, method_name)
-            await method()
+            await method(**dict(call.data))
 
-        hass.services.async_register(DOMAIN, service_name, _handle_service)
+        hass.services.async_register(
+            DOMAIN,
+            service_name,
+            _handle_service,
+            schema=schema,
+        )
 
 
 def _register_button_listeners(
     hass: HomeAssistant, manager: SchoolCycleDaysManager
 ) -> None:
-    """Listen to existing input_button helpers for drop-in compatibility."""
+    """Listen to the original input_button helpers for drop-in compatibility."""
 
     for action, entity_id in manager.buttons.items():
         if not entity_id:
