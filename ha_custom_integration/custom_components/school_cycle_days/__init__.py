@@ -66,6 +66,13 @@ CALENDAR_IMPORT_SCHEMA = vol.Schema(
     }
 )
 CALENDAR_NAME_SCHEMA = vol.Schema({vol.Optional("calendar_name"): cv.string})
+DELETE_UID_SCHEMA = vol.Schema({vol.Required("uid"): cv.string})
+DELETE_GENERATED_SCHEMA = vol.Schema(
+    {
+        vol.Optional("start_date"): cv.string,
+        vol.Optional("end_date"): cv.string,
+    }
+)
 
 SERVICE_DEFINITIONS: dict[str, tuple[str, vol.Schema | None]] = {
     "create_cycle_days": ("async_create_cycle_days", CREATE_SCHEMA),
@@ -76,6 +83,8 @@ SERVICE_DEFINITIONS: dict[str, tuple[str, vol.Schema | None]] = {
     "delete_holidays": ("async_delete_holidays", None),
     "add_dates_from_other_calendar": ("async_add_dates_from_other_calendar", CALENDAR_IMPORT_SCHEMA),
     "refresh_calendar_list": ("async_refresh_calendar_list", None),
+    "delete_event": ("async_delete_event", DELETE_UID_SCHEMA),
+    "delete_generated_events": ("async_delete_generated_events", DELETE_GENERATED_SCHEMA),
     "clear_calendar": ("async_clear_calendar", None),
     "clear_and_rerun": ("async_clear_and_rerun", CREATE_SCHEMA),
     "export_ics": ("async_export_ics", CALENDAR_NAME_SCHEMA),
