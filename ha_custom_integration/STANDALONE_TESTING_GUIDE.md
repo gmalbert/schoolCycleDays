@@ -1,20 +1,14 @@
 # School Cycle Days — Standalone Testing Guide
 
-This is the test plan for the preferred standalone architecture.
+This is the acceptance test plan for the **HA-independent standalone product**.
 
-The older `LOCAL_TESTING_GUIDE.md` applies to the interim HA-native custom integration. Use **this** guide for the standalone app.
+The older `LOCAL_TESTING_GUIDE.md` applies only to the interim HA-native custom integration.
 
-## Safety rule
+The most important rule is:
 
-Do not begin with the production school calendar.
+> Test the standalone calendar with Home Assistant completely unconfigured first.
 
-Create a disposable HA Local Calendar such as:
-
-```text
-calendar.school_cycle_test
-```
-
-Keep AppDaemon pointed at the production calendar while the standalone app points at the test calendar.
+Optional integrations are tested only after the local calendar, SQLite schedule, REST API, and ICS feed pass.
 
 ---
 
@@ -26,7 +20,7 @@ git switch update/move-to-python-custom-integration
 git pull
 ```
 
-Move to:
+Then:
 
 ```bash
 cd ha_custom_integration/standalone_app
@@ -34,77 +28,73 @@ cd ha_custom_integration/standalone_app
 
 ---
 
-# 2. Create the HA token
+# 2. Create the environment
 
-In Home Assistant:
-
-```text
-Profile → Security → Long-Lived Access Tokens → Create Token
-```
-
-Use a dedicated token for School Cycle Days.
-
-Do not commit it.
-
----
-
-# 3. Create `.env`
-
-Windows Git Bash:
+## Windows Git Bash
 
 ```bash
-cp .env.example .env
-```
-
-Edit:
-
-```dotenv
-SCD_HA_URL=http://homeassistant.local:8123
-SCD_HA_TOKEN=YOUR_TOKEN
-SCD_DATABASE_PATH=./data/school_cycle_days.sqlite3
-SCD_VERIFY_SSL=true
-SCD_HOST=0.0.0.0
-SCD_PORT=8088
-```
-
-If `homeassistant.local` does not resolve from the machine running the app, use HA's LAN IP instead.
-
----
-
-# 4. Python development setup
-
-Requires Python 3.12+.
-
-```bash
-python --version
 python -m venv .venv
 source .venv/Scripts/activate
 pip install -e '.[dev]'
 ```
 
-Run unit tests:
+## Linux/macOS
 
 ```bash
-pytest -q
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
 ```
 
-The initial test suite covers:
-
-- cycle advancement;
-- non-school-day pause behavior;
-- generated-event ownership matching;
-- unrelated event preservation;
-- delete-then-regenerate behavior.
-
-Run syntax compilation separately if desired:
+Copy the example environment:
 
 ```bash
-python -m compileall school_cycle_days tests
+cp .env.example .env
 ```
+
+For the first test, leave all integration values blank:
+
+```dotenv
+SCD_DATABASE_PATH=./data/school_cycle_days.sqlite3
+SCD_HOST=0.0.0.0
+SCD_PORT=8088
+
+SCD_HA_URL=
+SCD_HA_TOKEN=
+SCD_MQTT_HOST=
+```
+
+This is deliberate.
+
+If the app does not work in this state, the architecture has regressed.
 
 ---
 
-# 5. Start development server
+# 3. Run static/unit validation
+
+```bash
+python -m compileall school_cycle_days tests
+pytest -q
+```
+
+Core tests should not require Home Assistant.
+
+Current test areas include:
+
+- cycle advancement;
+- no-school-day pause behavior;
+- weekend behavior;
+- standalone schedule rows;
+- local ICS generation;
+- external ICS filtering;
+- malformed trailing VEVENT repair;
+- legacy generated-event recognition for the optional HA adapter.
+
+Do not continue to production data if syntax or unit tests fail.
+
+---
+
+# 4. Start the standalone app
 
 ```bash
 uvicorn school_cycle_days.main:app --reload --host 0.0.0.0 --port 8088
@@ -116,279 +106,146 @@ Open:
 http://localhost:8088
 ```
 
-## Code update behavior
+Expected:
 
-With `--reload`:
-
-- editing Python normally restarts the standalone process automatically;
-- Home Assistant does not restart;
-- Home Assistant does not need a custom-component reload;
-- your SQLite state remains on disk;
-- browser template changes normally need only a page refresh.
-
-Changes to `.env` require stopping/restarting Uvicorn because environment settings are loaded at process startup.
+- app loads even though HA is blank;
+- no HA connection error is required for the app to function;
+- month calendar is visible;
+- settings panel is visible;
+- `.ics` import is visible;
+- non-school-day management is visible;
+- holiday controls are visible;
+- outputs/integrations panel is visible.
 
 ---
 
-# 6. Test connectivity first
+# 5. Verify health endpoint without HA
 
 Open:
 
 ```text
-http://localhost:8088/health
+http://localhost:8088/api/v1/health
 ```
 
-Expected:
+Expected shape:
 
 ```json
 {
   "status": "ok",
-  "home_assistant": "connected"
+  "standalone": true,
+  "home_assistant_configured": false,
+  "mqtt_configured": false,
+  "schedule_rows": 0
 }
 ```
 
-If it fails:
+`schedule_rows` may be non-zero if you already configured the app.
 
-- verify HA URL;
-- verify token;
-- verify the app host can reach HA;
-- check HTTP vs HTTPS;
-- check certificate validation;
-- test the token manually with curl if necessary.
+The critical fields are:
 
-Example:
-
-```bash
-curl \
-  -H "Authorization: Bearer $SCD_HA_TOKEN" \
-  -H "Content-Type: application/json" \
-  "$SCD_HA_URL/api/"
+```text
+status = ok
+standalone = true
 ```
+
+with HA disabled.
 
 ---
 
-# 7. Verify calendar discovery
+# 6. Configure a small deterministic school range
 
-Open the main UI.
-
-The **Home Assistant calendar** dropdown should list HA calendar entities.
-
-Select only:
+Use the UI:
 
 ```text
-calendar.school_cycle_test
+School year start: 2026-09-08
+School year end:   2026-09-14
+
+Cycle Day 1: Art
+Cycle Day 2: Music
+Cycle Day 3: Library
+Cycle Day 4: PE
+Cycle Day 5: STEM
+
+Starting cycle day: 1
 ```
 
-If the calendar list is empty but `/health` succeeds, verify that the token's HA user can read the calendar entity.
+For this test, clear/leave empty:
+
+- non-school days;
+- holidays.
+
+Save.
+
+Expected school days:
+
+```text
+Tue Sep 8  -> Day 1 Art
+Wed Sep 9  -> Day 2 Music
+Thu Sep 10 -> Day 3 Library
+Fri Sep 11 -> Day 4 PE
+Sat Sep 12 -> Weekend
+Sun Sep 13 -> Weekend
+Mon Sep 14 -> Day 5 STEM
+```
+
+The month calendar should display these results directly.
 
 ---
 
-# 8. Configure a tiny test range
+# 7. Verify cycle progression through the API
 
-Use four weekdays, for example:
-
-```text
-Start: 2026-09-08
-End:   2026-09-11
-```
-
-Cycle labels:
+Open:
 
 ```text
-Day 1: Art
-Day 2: Music
-Day 3: Library
-Day 4: PE
-Day 5: STEM
+/api/v1/schedule?start=2026-09-08&end=2026-09-14
 ```
 
-Starting cycle day:
+Verify:
 
-```text
-1
-```
-
-Leave visible No School and weekend entries off initially.
-
-Press:
-
-```text
-Save settings
-```
-
-Refresh the page and confirm the values remain. This tests SQLite persistence.
+- each date exists exactly once;
+- school rows have `kind=school`;
+- weekend rows have `kind=weekend`;
+- cycle-day values are 1,2,3,4,5 only on school dates;
+- weekends do not advance the cycle.
 
 ---
 
-# 9. Test initial generation
-
-Press:
-
-```text
-Generate configured school year
-```
-
-Expected HA test-calendar entries:
-
-```text
-Sep 8  — Day 1 (Art)
-Sep 9  — Day 2 (Music)
-Sep 10 — Day 3 (Library)
-Sep 11 — Day 4 (PE)
-```
-
-Open one event and confirm its description contains:
-
-```text
-[school_cycle_days]
-```
-
-This marker is critical for safe future deletion.
-
----
-
-# 10. Test application persistence
-
-Stop Uvicorn with Ctrl+C.
-
-Restart:
-
-```bash
-uvicorn school_cycle_days.main:app --reload --host 0.0.0.0 --port 8088
-```
-
-Confirm settings still appear.
-
-Add a manual non-school date, restart again, and confirm the date remains.
-
-This verifies School Cycle Days state is independent of HA restart/state restoration.
-
----
-
-# 11. Test non-school-day cycle pause
-
-First remove/recreate the test events as needed so the range is clean.
+# 8. Test manual no-school day / snow-day shifting
 
 Add:
-
-```text
-2026-09-09
-```
-
-as a non-school day.
-
-Regenerate the four-day range.
-
-Expected sequence:
-
-```text
-Sep 8  — Day 1 (Art)
-Sep 9  — no cycle-day event
-Sep 10 — Day 2 (Music)
-Sep 11 — Day 3 (Library)
-```
-
-The cycle must pause, not advance, on the blocked date.
-
----
-
-# 12. Test single-day deletion
-
-Choose a date containing a generated event, e.g.:
 
 ```text
 2026-09-10
 ```
 
-Use:
+as a non-school day.
+
+The schedule should automatically recalculate to:
 
 ```text
-Delete generated events on this date
+Sep 8  -> Day 1 Art
+Sep 9  -> Day 2 Music
+Sep 10 -> No School
+Sep 11 -> Day 3 Library
+Sep 12 -> Weekend
+Sep 13 -> Weekend
+Sep 14 -> Day 4 PE
 ```
 
-Expected:
+This is the central business rule.
 
-- the generated event on Sep 10 disappears;
-- Sep 8 and Sep 11 remain;
-- no `.ics` file is deleted;
-- no HA restart occurs.
+Verify it both:
 
-This validates remote UID retrieval + WebSocket deletion.
+- visually in the standalone calendar;
+- through `/api/v1/schedule`.
+
+Then remove Sep 10 and confirm the cycle returns to the original sequence.
 
 ---
 
-# 13. Verify UID availability
+# 9. Test holiday generation
 
-The deletion test implicitly verifies that the selected calendar provider returns event UIDs.
-
-If deletion reports zero despite a generated event being present, inspect the HA REST response manually:
-
-```bash
-curl \
-  -H "Authorization: Bearer $SCD_HA_TOKEN" \
-  "$SCD_HA_URL/api/calendars/calendar.school_cycle_test?start=2026-09-10T00:00:00-04:00&end=2026-09-11T00:00:00-04:00"
-```
-
-Look for:
-
-```json
-"uid": "..."
-```
-
-Also confirm the event description contains the ownership marker.
-
----
-
-# 14. Critical unrelated-event preservation test
-
-Create a manual event in the same HA test calendar:
-
-```text
-Sep 10 — Dentist Appointment
-```
-
-Its description should **not** contain `[school_cycle_days]`.
-
-Regenerate a range that includes Sep 10.
-
-Expected:
-
-```text
-Dentist Appointment remains.
-School Cycle Days entries are replaced.
-```
-
-If the unrelated event disappears, stop testing and do not use the production calendar.
-
----
-
-# 15. Test legacy AppDaemon event recognition
-
-Create or retain an old-style event that looks like:
-
-```text
-Day 3 (Library)
-```
-
-without the new marker.
-
-Run selective regeneration over that date.
-
-The standalone migration logic should recognize the historical event shape and delete it before creating the replacement.
-
-This is intentionally migration compatibility; new events should rely on the explicit ownership marker instead.
-
----
-
-# 16. Test holidays
-
-Configure:
-
-```text
-US state: NH
-```
-
-and a school-year range spanning the dates you want.
+Set a school-year range that includes a known state holiday.
 
 Press:
 
@@ -396,274 +253,487 @@ Press:
 Load / refresh holidays
 ```
 
-Verify holidays appear in the UI.
+Verify:
 
-Generate/regenerate across a known holiday and confirm the cycle does not advance on that blocked weekday.
+- holiday appears in the Holidays list;
+- matching date becomes No School in the standalone schedule;
+- cycle progression pauses on that date;
+- clearing holidays removes the holiday block after recalculation.
 
-If **Create visible No School events** is enabled, confirm a No School event appears with the School Cycle Days marker.
-
----
-
-# 17. Test weekends
-
-Use a range spanning a weekend.
-
-With visible weekend events disabled:
-
-- no weekend events should be created;
-- the cycle should not advance.
-
-Enable visible weekend events and regenerate.
-
-Expected weekend entries:
-
-```text
-No School
-```
-
-with a description containing:
-
-```text
-Weekend
-[school_cycle_days]
-```
+Holiday state should remain independent from manually/imported non-school days.
 
 ---
 
-# 18. Realistic snow-day test
+# 10. Test external ICS import
 
-Generate a normal week:
+Use an `.ics` containing both unrelated and matching events, for example:
 
-```text
-Mon Day 1
-Tue Day 2
-Wed Day 3
-Thu Day 4
-Fri Day 5
+```ics
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:1
+DTSTART;VALUE=DATE:20260921
+DTEND;VALUE=DATE:20260922
+SUMMARY:No School - Teacher Workshop
+END:VEVENT
+BEGIN:VEVENT
+UID:2
+DTSTART;VALUE=DATE:20260922
+DTEND;VALUE=DATE:20260923
+SUMMARY:Soccer Game
+END:VEVENT
+BEGIN:VEVENT
+UID:3
+DTSTART;VALUE=DATE:20260923
+DTEND;VALUE=DATE:20260924
+SUMMARY:No School
+END:VEVENT
+END:VCALENDAR
 ```
 
-Then add Wednesday as a non-school day.
-
-Regenerate Wednesday through Friday.
-
-Set the starting cycle day for that replacement range appropriately.
-
-Expected end state:
+Upload through:
 
 ```text
-Mon Day 1
-Tue Day 2
-Wed blocked
-Thu Day 3
-Fri Day 4
+Import district/school calendar
 ```
 
-A future enhancement should calculate the continuation automatically so you do not have to set the restart day manually.
+Choose:
+
+```text
+Import No School dates
+```
+
+Expected imported dates:
+
+```text
+2026-09-21
+2026-09-23
+```
+
+Expected excluded date:
+
+```text
+2026-09-22
+```
+
+because `Soccer Game` does not begin with `No School`.
+
+Verify the local calendar immediately recalculates.
 
 ---
 
-# 19. HA restart independence test
+# 11. Test cleaned ICS download
 
-With the standalone app still running, restart Home Assistant.
+Upload the same file but choose:
+
+```text
+Download cleaned .ics
+```
+
+Open the downloaded file.
 
 Expected:
 
-- standalone process stays alive;
-- web UI and SQLite data remain available;
-- HA-dependent operations fail while HA is down;
-- after HA returns, operations work again without restarting the standalone app.
-
-This validates the main architectural benefit.
+- valid VCALENDAR wrapper;
+- only matching `No School...` VEVENTs;
+- unrelated events omitted;
+- no database changes from download-only mode.
 
 ---
 
-# 20. Standalone restart independence test
+# 12. Test malformed final event repair
 
-Restart the standalone app while leaving HA alone.
+Prepare an ICS whose last matching VEVENT lacks:
+
+```text
+END:VEVENT
+```
+
+Upload it.
 
 Expected:
 
-- HA remains fully functional;
-- existing calendar entries remain;
-- standalone settings/non-school days/holidays survive because they are in SQLite;
-- connection resumes after standalone startup.
+- importer does not crash;
+- final event is repaired;
+- matching date is imported;
+- UI message notes that the final VEVENT was repaired.
+
+This carries forward the behavior of the original `no_school_calendar.py` utility.
 
 ---
 
-# 21. Docker test
+# 13. Test multi-day no-school event
 
-Stop local Uvicorn first if it uses port 8088.
+ICS example:
 
-Run:
+```ics
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261223
+DTEND;VALUE=DATE:20261228
+SUMMARY:No School - Winter Break
+END:VEVENT
+```
+
+Because ICS all-day `DTEND` is exclusive, expected covered dates are:
+
+```text
+2026-12-23
+2026-12-24
+2026-12-25
+2026-12-26
+2026-12-27
+```
+
+The app should deduplicate any dates that already exist.
+
+---
+
+# 14. Test built-in month calendar UX
+
+Verify desktop layout:
+
+- seven-column calendar grid;
+- clear month heading;
+- previous/next month navigation;
+- Today marker;
+- cycle day title visible;
+- cycle label visible;
+- No School visually distinct;
+- weekends visually distinct;
+- out-of-month dates subdued.
+
+Resize browser/mobile view.
+
+Verify:
+
+- no horizontal page overflow;
+- cards remain readable;
+- controls remain usable;
+- month navigation remains accessible.
+
+Also test browser light and dark appearance.
+
+---
+
+# 15. Test Today / Next School Day summaries
+
+For a date within a configured test schedule, verify:
+
+```text
+/api/v1/today
+```
+
+matches the UI Today card.
+
+Verify:
+
+```text
+/api/v1/next-school-day
+```
+
+matches the UI Next School Day card.
+
+If today is Friday and the weekend follows, next-school-day should skip Saturday/Sunday.
+
+If an intervening Monday is No School, it should skip Monday as well.
+
+---
+
+# 16. Test standalone ICS feed
+
+Open:
+
+```text
+/calendar.ics
+```
+
+Expected:
+
+- valid VCALENDAR;
+- school cycle events included;
+- deterministic UIDs;
+- dates match local schedule;
+- no HA connection required.
+
+Toggle:
+
+```text
+Include No School events in exported/subscribed ICS feeds
+```
+
+and verify No School entries appear/disappear accordingly.
+
+Toggle weekend inclusion and verify the same for weekend entries.
+
+---
+
+# 17. Test persistence
+
+After configuring the app and generating schedule data:
+
+1. stop uvicorn;
+2. start it again;
+3. refresh the browser.
+
+Expected:
+
+- settings persist;
+- imported/manual no-school dates persist;
+- holidays persist;
+- generated schedule persists;
+- calendar renders without requiring re-entry.
+
+Delete the SQLite database only when intentionally resetting the test environment.
+
+---
+
+# 18. Test Docker without HA
+
+From `standalone_app/`:
 
 ```bash
 docker compose up -d --build
 ```
 
-Check:
+Do not define HA/MQTT variables.
+
+Expected:
+
+- container starts;
+- `http://localhost:8088` works;
+- `/api/v1/health` reports standalone=true;
+- calendar can be configured and used;
+- `./data` contains the persistent database.
+
+Then:
 
 ```bash
-docker compose ps
-docker compose logs -f
+docker compose restart
 ```
 
-Open:
+Verify persistence.
+
+---
+
+# 19. Optional MQTT / Home Assistant Discovery test
+
+Only after all standalone tests pass.
+
+Configure:
+
+```dotenv
+SCD_MQTT_HOST=<broker>
+SCD_MQTT_PORT=1883
+SCD_MQTT_USERNAME=<optional>
+SCD_MQTT_PASSWORD=<optional>
+```
+
+Restart the standalone app because environment configuration is read at process startup.
+
+Rebuild the calendar.
+
+Expected retained discovery/state topics create HA sensors for:
 
 ```text
-http://localhost:8088
+Today
+Tomorrow
+Next School Day
 ```
 
-Confirm the same database persists under:
+Verify sensor attributes include:
 
 ```text
-./data/
+day
+kind
+cycle_day
+title
+detail
+source
 ```
 
-when the container is recreated.
+Stop the MQTT broker temporarily.
+
+Change/rebuild the standalone schedule.
+
+Expected:
+
+- local rebuild still succeeds;
+- web calendar still works;
+- REST API still works;
+- ICS still works.
+
+This verifies integration failure isolation.
 
 ---
 
-# 22. Production cutover gate
+# 20. Optional direct HA adapter test
 
-Do not select the production calendar until all of these pass:
+Only needed for migration/direct-copy users.
 
-- [ ] unit tests pass;
-- [ ] `/health` succeeds;
-- [ ] calendar discovery works;
-- [ ] settings survive restart;
-- [ ] short generation works;
-- [ ] non-school day pauses the cycle;
-- [ ] holidays behave correctly;
-- [ ] single-day deletion works;
-- [ ] event UID is available;
-- [ ] unrelated event survives regeneration;
-- [ ] legacy AppDaemon cycle event can be selectively replaced;
-- [ ] HA restart does not lose standalone state;
-- [ ] standalone restart does not affect HA;
-- [ ] Docker or chosen deployment method is stable.
+Configure:
 
----
+```dotenv
+SCD_HA_URL=http://homeassistant.local:8123
+SCD_HA_TOKEN=<token>
+```
 
-# 23. Production cutover
+Restart app.
 
-When ready:
+Verify:
 
-1. disable AppDaemon CycleDays;
-2. ensure the HA-native prototype is not active against the production calendar;
-3. back up the calendar/data if desired;
-4. point standalone settings at the production `calendar.*` entity;
-5. perform a small selective regeneration first;
-6. verify unrelated events;
-7. expand to the remaining school year.
+- HA calendar list appears in optional integration section;
+- legacy Helper import is available;
+- app still reads local `schedule_days` as authority.
 
-Do not have multiple School Cycle Days implementations mutating the production calendar simultaneously.
+If testing direct calendar publishing, use a disposable HA calendar first.
+
+Do not point AppDaemon and standalone direct-publish operations at the same production calendar simultaneously.
 
 ---
 
-# 24. Development update cycle
+# 21. Test legacy Helper import
 
-## Plain Python
+With original Helpers still present, press:
 
-With:
+```text
+Import old HA Helpers
+```
+
+Verify imported standalone values against HA:
+
+- start/end dates;
+- five cycle labels;
+- starting cycle day;
+- include toggles;
+- stored non-school dates;
+- stored holidays where available.
+
+Then change a standalone setting.
+
+Expected:
+
+- standalone changes locally;
+- old HA Helper does not become authoritative again.
+
+---
+
+# 22. API error cases
+
+Test:
+
+```text
+/api/v1/schedule?start=bad-date
+```
+
+Expected:
+
+```text
+HTTP 400
+```
+
+with explanatory JSON.
+
+Test next-school-day after the configured school year ends.
+
+Expected:
+
+```text
+HTTP 404
+```
+
+rather than a fabricated date.
+
+---
+
+# 23. File upload safety checks
+
+Try uploading:
+
+- non-`.ics` filename;
+- >5 MB file;
+- empty file;
+- ICS with no matching No School events;
+- ICS containing malformed unrelated events.
+
+Expected:
+
+- clear UI message;
+- app remains running;
+- existing schedule/database remains intact.
+
+---
+
+# 24. Acceptance checklist
+
+The standalone architecture is acceptable for production testing when all of these pass:
+
+- [ ] app starts with HA/MQTT blank;
+- [ ] settings save locally;
+- [ ] cycle sequence is correct;
+- [ ] weekends do not advance cycle;
+- [ ] manual No School date shifts later cycle days;
+- [ ] holidays pause cycle;
+- [ ] arbitrary ICS import retains only `SUMMARY:No School...` events;
+- [ ] cleaned ICS download works;
+- [ ] malformed final VEVENT repair works;
+- [ ] multi-day import works;
+- [ ] month calendar is readable/responsive;
+- [ ] Today/Next School Day cards are correct;
+- [ ] `/api/v1/*` outputs are correct;
+- [ ] `/calendar.ics` is valid;
+- [ ] SQLite survives restart;
+- [ ] Docker works with no HA variables;
+- [ ] optional MQTT failure does not break core;
+- [ ] optional HA adapter remains non-authoritative;
+- [ ] AppDaemon can be disabled without losing standalone operation.
+
+---
+
+# 25. Development reload behavior
+
+When using:
 
 ```bash
 uvicorn school_cycle_days.main:app --reload
 ```
 
-workflow is:
+Python source changes trigger an application-process reload.
 
-```text
-edit Python
-→ save
-→ Uvicorn automatically restarts app
-→ refresh/use UI
-```
+Home Assistant never needs to restart because School Cycle Days source changed.
 
-No Home Assistant restart.
+Template changes generally require only browser refresh.
 
-## Git update
+Changes to `.env` require restarting the standalone process.
+
+Docker code changes require:
 
 ```bash
-git pull
-```
-
-If using editable local Python and Uvicorn reload, updated source is immediately used after the process reloads.
-
-If dependencies in `pyproject.toml` changed:
-
-```bash
-pip install -e '.[dev]'
-```
-
-again.
-
-## Docker
-
-```bash
-git pull
 docker compose up -d --build
 ```
 
-No HA restart.
+They do not require an HA restart.
 
 ---
 
-# 25. Useful troubleshooting checks
+# 26. Before distribution to other users
 
-## Test REST auth
+This acceptance plan validates current functionality, but a general public release also needs productization testing for:
 
-```bash
-curl -H "Authorization: Bearer $SCD_HA_TOKEN" "$SCD_HA_URL/api/"
-```
+- first-run onboarding;
+- authentication;
+- CSRF protection;
+- backup/restore;
+- schema migrations;
+- upgrade from one released version to the next;
+- Docker multi-architecture images;
+- integration credential handling;
+- API compatibility across versions.
 
-## List calendars
-
-```bash
-curl -H "Authorization: Bearer $SCD_HA_TOKEN" "$SCD_HA_URL/api/calendars"
-```
-
-## App health
-
-```bash
-curl http://localhost:8088/health
-```
-
-## Unit tests
-
-```bash
-pytest -q
-```
-
-## Syntax
-
-```bash
-python -m compileall school_cycle_days tests
-```
-
-## Docker logs
-
-```bash
-docker compose logs -f
-```
-
----
-
-# Expected result
-
-When this test plan passes, School Cycle Days should be operationally independent of HA while still using HA as the calendar endpoint:
+See:
 
 ```text
-Standalone web UI / SQLite / Python logic
-               |
-               | remote authenticated APIs
-               v
-        Home Assistant calendar
+standalone_app/PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md
 ```
 
-No AppDaemon.
-
-No mandatory School Cycle Days custom integration.
-
-No whole-calendar deletion.
-
-No HA restart during normal School Cycle Days development.
+for the full v1.0 release criteria.
