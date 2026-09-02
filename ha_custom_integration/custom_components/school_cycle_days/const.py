@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "school_cycle_days"
 STORAGE_KEY = f"{DOMAIN}.data"
-STORAGE_VERSION = 2
+STORAGE_VERSION = 1
 
 DEFAULT_NAME = "School Cycle Days"
 DEFAULT_CALENDAR_ENTITY = "calendar.school"
@@ -20,8 +20,8 @@ CONF_LEGACY_CALENDAR_STORAGE_PATH = "legacy_calendar_storage_path"
 
 PLATFORMS = ["button", "date", "number", "select", "switch", "text"]
 
-# Integration-owned UI settings. These are persisted by the manager and exposed
-# as native Home Assistant entities, so normal operation never requires YAML.
+# Integration-owned UI settings. These are persisted separately and exposed as
+# native Home Assistant entities, so normal operation never requires YAML.
 SETTING_START_DATE = "start_date"
 SETTING_END_DATE = "end_date"
 SETTING_ADDED_DATE = "added_date"
