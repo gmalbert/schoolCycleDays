@@ -55,6 +55,15 @@ class Database:
                     day TEXT PRIMARY KEY,
                     name TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS schedule_days (
+                    day TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    cycle_day INTEGER,
+                    title TEXT NOT NULL,
+                    detail TEXT NOT NULL DEFAULT '',
+                    source TEXT NOT NULL DEFAULT 'generated'
+                );
                 """
             )
 
@@ -87,7 +96,7 @@ class Database:
             connection.execute(
                 """
                 INSERT INTO non_school_days(day, source) VALUES(?, ?)
-                ON CONFLICT(day) DO UPDATE SET source=excluded.source
+                ON CONFLICT(day) DO NOTHING
                 """,
                 (day, source),
             )
@@ -128,3 +137,44 @@ class Database:
                 row["day"] for row in connection.execute("SELECT day FROM holiday_days")
             }
         return manual | holidays
+
+    def holiday_map(self) -> dict[str, str]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT day, name FROM holiday_days").fetchall()
+        return {row["day"]: row["name"] for row in rows}
+
+    def replace_schedule(self, rows: list[dict[str, Any]]) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM schedule_days")
+            connection.executemany(
+                """
+                INSERT INTO schedule_days(day, kind, cycle_day, title, detail, source)
+                VALUES(:day, :kind, :cycle_day, :title, :detail, :source)
+                """,
+                rows,
+            )
+
+    def list_schedule(self, start: str | None = None, end: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT day, kind, cycle_day, title, detail, source FROM schedule_days"
+        values: list[str] = []
+        clauses: list[str] = []
+        if start:
+            clauses.append("day >= ?")
+            values.append(start)
+        if end:
+            clauses.append("day <= ?")
+            values.append(end)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY day"
+        with self._connect() as connection:
+            rows = connection.execute(query, values).fetchall()
+        return [dict(row) for row in rows]
+
+    def schedule_day(self, day: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT day, kind, cycle_day, title, detail, source FROM schedule_days WHERE day = ?",
+                (day,),
+            ).fetchone()
+        return dict(row) if row else None
