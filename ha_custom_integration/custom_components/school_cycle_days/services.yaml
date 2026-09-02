@@ -83,13 +83,36 @@ refresh_calendar_list:
   name: Refresh calendar list
   description: Refresh legacy input_select helpers, if they exist, with local ICS calendars.
 
+delete_event:
+  name: Delete calendar event
+  description: Delete exactly one event from the target calendar using its calendar UID.
+  fields:
+    uid:
+      name: Event UID
+      description: UID returned by the calendar entity for the event.
+      required: true
+      example: "1a2b3c4d5e"
+
+delete_generated_events:
+  name: Delete generated events
+  description: Delete only School Cycle Days events in a date range, leaving unrelated calendar events untouched.
+  fields:
+    start_date:
+      name: Start date
+      description: First date to inspect (YYYY-MM-DD). Falls back to the legacy start-date helper.
+      example: "2026-09-01"
+    end_date:
+      name: End date
+      description: Last date to inspect (YYYY-MM-DD). Falls back to the legacy end-date helper.
+      example: "2027-06-15"
+
 clear_calendar:
-  name: Clear local calendar
-  description: Clear the target Local Calendar using the local-calendar file fallback.
+  name: Clear entire local calendar
+  description: Legacy destructive fallback that removes the target Local Calendar ICS file. Normally use Delete generated events instead.
 
 clear_and_rerun:
-  name: Clear and rerun
-  description: Clear the target Local Calendar and regenerate cycle-day events. Accepts the same fields as Create cycle days.
+  name: Replace generated cycle days
+  description: Delete only School Cycle Days events in the target range and regenerate them. Unrelated calendar events are preserved.
   fields:
     start_date:
       name: Start date
