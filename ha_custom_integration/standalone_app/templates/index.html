@@ -5,144 +5,123 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>School Cycle Days</title>
   <style>
-    :root { font-family: system-ui, sans-serif; color-scheme: light dark; }
-    body { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
-    .card { border: 1px solid #8886; border-radius: 12px; padding: 18px; }
-    label { display: block; margin: 10px 0 4px; font-weight: 600; }
-    input, select, button { width: 100%; box-sizing: border-box; padding: 9px; }
-    button { margin-top: 10px; cursor: pointer; }
-    .inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .check { display: flex; align-items: center; gap: 8px; }
-    .check input { width: auto; }
-    .message { padding: 12px; border: 1px solid #398c; border-radius: 8px; margin-bottom: 15px; }
-    .error { padding: 12px; border: 1px solid #c44; border-radius: 8px; margin-bottom: 15px; }
-    ul { padding-left: 20px; }
-    small { opacity: .75; }
+    :root {
+      --bg:#f5f7fb; --surface:#ffffff; --surface-2:#f8fafc; --text:#172033;
+      --muted:#667085; --border:#e4e8f0; --accent:#375dfb; --accent-soft:#eef2ff;
+      --school:#eaf7ef; --school-text:#17663a; --closed:#fff0f0; --closed-text:#a92d2d;
+      --weekend:#f4f5f7; --shadow:0 12px 35px rgba(23,32,51,.08);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text)}
+    a{color:inherit;text-decoration:none}.shell{max-width:1440px;margin:auto;padding:28px}
+    .topbar{display:flex;gap:22px;align-items:center;justify-content:space-between;margin-bottom:22px}
+    .brand h1{font-size:30px;letter-spacing:-.04em;margin:0}.brand p{margin:5px 0 0;color:var(--muted)}
+    .top-actions{display:flex;gap:10px;flex-wrap:wrap}.btn,button{border:0;border-radius:10px;padding:10px 14px;font-weight:650;cursor:pointer;background:var(--accent);color:white}
+    .btn.secondary,button.secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+    .message,.error{padding:13px 16px;border-radius:12px;margin:0 0 18px}.message{background:#edf8f1;color:#19613a;border:1px solid #c9ead5}.error{background:#fff1f1;color:#9f2c2c;border:1px solid #f2caca}
+    .hero-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
+    .hero-card{background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:16px;padding:18px}
+    .eyebrow{text-transform:uppercase;font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:750}.hero-value{font-size:23px;font-weight:760;margin-top:7px;letter-spacing:-.02em}.hero-detail{color:var(--muted);font-size:14px;margin-top:4px}
+    .calendar-card{background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:18px;overflow:hidden;margin-bottom:22px}
+    .calendar-toolbar{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--border)}
+    .calendar-toolbar h2{margin:0;font-size:22px}.month-nav{display:flex;align-items:center;gap:8px}.month-nav a{padding:8px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
+    .weekday-grid,.month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.weekday{padding:10px 12px;color:var(--muted);font-size:12px;font-weight:750;text-transform:uppercase;border-bottom:1px solid var(--border)}
+    .day{min-height:132px;padding:10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);position:relative}.day:nth-child(7n){border-right:0}.day.out{background:#fafbfc;color:#a8afbd}.day.today{box-shadow:inset 0 0 0 2px var(--accent)}
+    .date-number{font-weight:700;font-size:13px}.pill{margin-top:18px;border-radius:10px;padding:9px;font-size:13px;line-height:1.25}.pill.school{background:var(--school);color:var(--school-text)}.pill.no_school{background:var(--closed);color:var(--closed-text)}.pill.weekend{background:var(--weekend);color:var(--muted)}
+    .pill strong{display:block;font-size:14px}.pill small{display:block;margin-top:3px;opacity:.82}.today-badge{position:absolute;right:9px;top:9px;font-size:10px;background:var(--accent);color:white;padding:3px 6px;border-radius:20px}
+    .content-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:20px}.stack{display:grid;gap:20px}.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 6px 20px rgba(23,32,51,.04)}
+    .card h3{margin:0 0 6px;font-size:18px}.card p.lead{margin:0 0 14px;color:var(--muted)}label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}
+    input,select{width:100%;padding:10px 11px;border:1px solid #d8dde7;border-radius:9px;background:var(--surface);color:var(--text)}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.checks{display:grid;gap:7px;margin:12px 0}.check{display:flex;gap:8px;align-items:flex-start;font-size:13px}.check input{width:auto;margin-top:3px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.actions form{margin:0}.compact-list{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:7px;max-height:250px;overflow:auto}.compact-list li{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;background:var(--surface-2);border-radius:9px;font-size:13px}.mini{padding:5px 8px;font-size:11px;border-radius:7px;background:#fff;color:#8f2d2d;border:1px solid #efcccc}
+    .integration{border-left:4px solid var(--accent)}.muted{color:var(--muted);font-size:13px}.code-link{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:#f1f3f6;padding:3px 6px;border-radius:5px}
+    @media(max-width:900px){.hero-grid,.content-grid{grid-template-columns:1fr}.day{min-height:100px}.pill{margin-top:10px;padding:6px;font-size:11px}.weekday{font-size:10px;padding:8px 5px}.shell{padding:14px}.topbar{align-items:flex-start;flex-direction:column}}
+    @media(prefers-color-scheme:dark){:root{--bg:#10131a;--surface:#171b24;--surface-2:#1e2430;--text:#edf1f7;--muted:#9aa5b5;--border:#293140;--accent-soft:#222c55;--school:#173a2a;--school-text:#8de0ae;--closed:#402022;--closed-text:#ffabab;--weekend:#202630;--shadow:none}.mini{background:#24181a}.code-link{background:#242b37}}
   </style>
 </head>
 <body>
-  <h1>School Cycle Days</h1>
-  <p>Standalone application connected remotely to <strong>{{ ha_url }}</strong>.</p>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand"><h1>School Cycle Days</h1><p>Your school schedule, without needing another calendar service.</p></div>
+    <div class="top-actions"><a class="btn secondary" href="/calendar.ics">Subscribe / download ICS</a><a class="btn secondary" href="/api/v1/today">Today JSON</a></div>
+  </header>
 
   {% if message %}<div class="message">{{ message }}</div>{% endif %}
-  {% if connection_error %}<div class="error"><strong>Home Assistant connection error:</strong> {{ connection_error }}</div>{% endif %}
+  {% if ha_error %}<div class="error"><strong>Optional Home Assistant connection:</strong> {{ ha_error }}</div>{% endif %}
 
-  <section class="card" style="margin-bottom:18px">
-    <h2>Migration from the old Home Assistant setup</h2>
-    <p>If the original School Cycle Days Helpers still exist in Home Assistant, this will copy the current school-year dates, five cycle labels, restart day, toggles, non-school dates, and stored holiday dates into the standalone database. It only reads the HA Helpers; it does not change or delete them.</p>
-    <form method="post" action="/migration/import-legacy-helpers">
-      <button type="submit">Import legacy HA Helpers</button>
-    </form>
+  <section class="hero-grid">
+    <div class="hero-card"><div class="eyebrow">Today</div><div class="hero-value">{{ today_row.title }}</div><div class="hero-detail">{% if today_row.detail %}{{ today_row.detail }} · {% endif %}{{ today_row.day }}</div></div>
+    <div class="hero-card"><div class="eyebrow">Next school day</div><div class="hero-value">{% if next_school %}{{ next_school.title }}{% else %}Not scheduled{% endif %}</div><div class="hero-detail">{% if next_school %}{{ next_school.detail }} · {{ next_school.day }}{% else %}No future school day is currently configured.{% endif %}</div></div>
+    <div class="hero-card"><div class="eyebrow">Calendar feed</div><div class="hero-value">Always available</div><div class="hero-detail">Use <span class="code-link">/calendar.ics</span> in any compatible calendar app.</div></div>
   </section>
 
-  <section class="card" style="margin-bottom:18px">
-    <h2>Import an external .ics school calendar</h2>
-    <p>Upload any ICS calendar. The app keeps only VEVENT entries whose summary begins with <strong>No School</strong>, matching the original <code>no_school_calendar.py</code> behavior. Other events are discarded. Multi-day No School events become each covered non-school date, and duplicate dates are ignored.</p>
-    <form method="post" action="/ics/process" enctype="multipart/form-data">
-      <label>ICS calendar file</label>
-      <input type="file" name="calendar_file" accept=".ics,text/calendar" required>
-      <div class="inline">
-        <button type="submit" name="mode" value="import">Clean + import No School dates</button>
-        <button type="submit" name="mode" value="download">Download cleaned .ics only</button>
+  <section class="calendar-card">
+    <div class="calendar-toolbar">
+      <div><div class="eyebrow">Standalone calendar</div><h2>{{ month_label }}</h2></div>
+      <div class="month-nav"><a href="/?month={{ previous_month }}">‹</a><a href="/?month={{ next_month }}">›</a></div>
+    </div>
+    <div class="weekday-grid">{% for name in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}<div class="weekday">{{ name }}</div>{% endfor %}</div>
+    <div class="month-grid">
+      {% for week in calendar_grid.weeks %}{% for item in week %}
+      <div class="day {% if not item.in_month %}out{% endif %} {% if item.is_today %}today{% endif %}">
+        <span class="date-number">{{ item.date.day }}</span>{% if item.is_today %}<span class="today-badge">Today</span>{% endif %}
+        {% if item.schedule %}<div class="pill {{ item.schedule.kind }}"><strong>{{ item.schedule.title }}</strong>{% if item.schedule.detail %}<small>{{ item.schedule.detail }}</small>{% endif %}</div>{% endif %}
       </div>
-    </form>
-    <p><small>The uploaded source calendar is never modified. The cleaner also repairs a final VEVENT that is missing END:VEVENT, as the original script did.</small></p>
+      {% endfor %}{% endfor %}
+    </div>
   </section>
 
-  <div class="grid">
-    <section class="card">
-      <h2>School year & cycle</h2>
-      <form method="post" action="/settings">
-        <label>Home Assistant calendar</label>
-        <select name="calendar_entity" required>
-          <option value="">Select a calendar</option>
-          {% for calendar in calendars %}
-          <option value="{{ calendar.entity_id }}" {% if settings.calendar_entity == calendar.entity_id %}selected{% endif %}>{{ calendar.name }} — {{ calendar.entity_id }}</option>
-          {% endfor %}
-        </select>
+  <div class="content-grid">
+    <div class="stack">
+      <section class="card">
+        <h3>School year setup</h3><p class="lead">The standalone schedule is authoritative. Saving changes recalculates the entire school year locally.</p>
+        <form method="post" action="/settings">
+          <div class="fields"><div><label>School year start</label><input type="date" name="school_year_start" value="{{ settings.school_year_start }}" required></div><div><label>School year end</label><input type="date" name="school_year_end" value="{{ settings.school_year_end }}" required></div></div>
+          <label>US state for holidays</label><input name="us_state" value="{{ settings.us_state }}" maxlength="2" required>
+          <div class="fields">{% for n in range(1,6) %}<div><label>Cycle Day {{ n }}</label><input name="cycle_day_{{ n }}" value="{{ settings['cycle_day_' ~ n] }}" required></div>{% endfor %}<div><label>Starting cycle day</label><input type="number" name="starting_cycle_day" min="1" max="5" value="{{ settings.starting_cycle_day }}"></div></div>
+          <div class="checks"><label class="check"><input type="checkbox" name="include_no_school_events" value="true" {% if settings.include_no_school_events %}checked{% endif %}> Include No School events in exported/subscribed ICS feeds</label><label class="check"><input type="checkbox" name="include_weekend_events" value="true" {% if settings.include_weekend_events %}checked{% endif %}> Include weekend entries in exported/subscribed ICS feeds</label></div>
+          <button type="submit">Save & rebuild calendar</button>
+        </form>
+      </section>
 
-        <label>US state code for holidays</label>
-        <input name="us_state" value="{{ settings.us_state }}" maxlength="2" required>
+      <section class="card">
+        <h3>Import district/school calendar</h3><p class="lead">Upload any .ics file. Only events whose summary starts with “No School” are kept as no-school dates.</p>
+        <form method="post" action="/ics/process" enctype="multipart/form-data"><input type="file" name="calendar_file" accept=".ics,text/calendar" required><div class="actions"><button type="submit" name="mode" value="import">Import No School dates</button><button class="secondary" type="submit" name="mode" value="download">Download cleaned .ics</button></div></form>
+      </section>
 
-        <div class="inline">
-          <div><label>School year start</label><input type="date" name="school_year_start" value="{{ settings.school_year_start }}" required></div>
-          <div><label>School year end</label><input type="date" name="school_year_end" value="{{ settings.school_year_end }}" required></div>
-        </div>
+      <section class="card">
+        <h3>Non-school days</h3><p class="lead">Add snow days or other closures manually. The cycle shifts automatically.</p>
+        <form method="post" action="/non-school-days/add"><div class="fields"><div><label>Date</label><input type="date" name="day" required></div><div style="align-self:end"><button type="submit">Add & recalculate</button></div></div></form>
+        <ul class="compact-list">{% for item in non_school_days %}<li><span>{{ item.day }} <span class="muted">{{ item.source }}</span></span><form method="post" action="/non-school-days/delete"><input type="hidden" name="day" value="{{ item.day }}"><button class="mini" type="submit">Remove</button></form></li>{% else %}<li>No manual/imported non-school dates yet.</li>{% endfor %}</ul>
+        {% if non_school_days %}<form method="post" action="/non-school-days/clear" class="actions"><button class="secondary" type="submit">Clear all non-school dates</button></form>{% endif %}
+      </section>
+    </div>
 
-        {% for number in range(1, 6) %}
-        <label>Cycle Day {{ number }}</label>
-        <input name="cycle_day_{{ number }}" value="{{ settings['cycle_day_' ~ number] }}" required>
-        {% endfor %}
+    <aside class="stack">
+      <section class="card">
+        <h3>Holidays</h3><p class="lead">Use the configured state to populate holidays, then customize your non-school dates separately.</p>
+        <div class="actions"><form method="post" action="/holidays/load"><button type="submit">Load / refresh holidays</button></form><form method="post" action="/holidays/clear"><button class="secondary" type="submit">Clear</button></form></div>
+        <ul class="compact-list">{% for item in holidays %}<li><span>{{ item.day }}</span><span class="muted">{{ item.name }}</span></li>{% else %}<li>No stored holidays.</li>{% endfor %}</ul>
+      </section>
 
-        <label>Starting cycle day</label>
-        <input type="number" name="starting_cycle_day" min="1" max="5" value="{{ settings.starting_cycle_day }}">
+      <section class="card">
+        <h3>Outputs & integrations</h3><p class="lead">The app works by itself. Other systems can consume its calendar or API.</p>
+        <p><strong>Calendar subscription</strong><br><span class="code-link">/calendar.ics</span></p>
+        <p><strong>REST sensors</strong><br><span class="code-link">/api/v1/today</span><br><span class="code-link">/api/v1/tomorrow</span><br><span class="code-link">/api/v1/next-school-day</span></p>
+        <form method="post" action="/calendar/rebuild"><input type="hidden" name="month" value="{{ month_value }}"><button class="secondary" type="submit">Rebuild standalone calendar</button></form>
+      </section>
 
-        <label class="check"><input type="checkbox" name="include_no_school_events" value="true" {% if settings.include_no_school_events %}checked{% endif %}> Create visible “No School” events on blocked weekdays</label>
-        <label class="check"><input type="checkbox" name="include_weekend_events" value="true" {% if settings.include_weekend_events %}checked{% endif %}> Create visible weekend events</label>
-
-        <button type="submit">Save settings</button>
-      </form>
-    </section>
-
-    <section class="card">
-      <h2>Non-school days</h2>
-      <form method="post" action="/non-school-days/add">
-        <label>Add non-school day</label>
-        <input type="date" name="day" required>
-        <button type="submit">Add non-school day</button>
-      </form>
-
-      <h3>Stored dates</h3>
-      {% if non_school_days %}
-      <ul>
-        {% for item in non_school_days %}
-        <li>{{ item.day }} ({{ item.source }})
-          <form style="display:inline" method="post" action="/non-school-days/delete">
-            <input type="hidden" name="day" value="{{ item.day }}">
-            <button style="width:auto; display:inline; padding:3px 7px" type="submit">Remove</button>
-          </form>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}<p>No manually entered non-school days.</p>{% endif %}
-
-      <form method="post" action="/non-school-days/clear"><button type="submit">Clear manual non-school days</button></form>
-    </section>
-
-    <section class="card">
-      <h2>Holidays</h2>
-      <p>Loads holidays from the configured state for the current school-year range.</p>
-      <form method="post" action="/holidays/load"><button type="submit">Load / refresh holidays</button></form>
-      <form method="post" action="/holidays/clear"><button type="submit">Clear holidays</button></form>
-      {% if holidays %}
-      <ul>{% for item in holidays %}<li>{{ item.day }} — {{ item.name }}</li>{% endfor %}</ul>
-      {% endif %}
-    </section>
-
-    <section class="card">
-      <h2>Calendar operations</h2>
-      <form method="post" action="/calendar/generate">
-        <button type="submit">Generate configured school year</button>
-      </form>
-      <p><small>Generate does not delete existing events. Use Regenerate when replacing previously-generated School Cycle Days events.</small></p>
-
-      <h3>Regenerate a range</h3>
-      <form method="post" action="/calendar/regenerate">
-        <div class="inline">
-          <div><label>Start</label><input type="date" name="start_date"></div>
-          <div><label>End</label><input type="date" name="end_date"></div>
-        </div>
-        <button type="submit">Delete generated events + regenerate range</button>
-      </form>
-      <p><small>Blank dates use the configured school-year start/end. Unrelated calendar events are preserved.</small></p>
-
-      <h3>Delete generated event(s) on one date</h3>
-      <form method="post" action="/calendar/delete-day">
-        <input type="date" name="day" required>
-        <button type="submit">Delete generated events on this date</button>
-      </form>
-    </section>
+      <section class="card integration">
+        <h3>Home Assistant <span class="muted">optional</span></h3>
+        {% if ha_enabled %}
+          <p class="lead">Connected adapter configured for {{ ha_url }}. The standalone database remains authoritative.</p>
+          {% if ha_calendars %}<form method="post" action="/integrations/home-assistant/publish"><label>Publish a copy to HA calendar</label><select name="calendar_entity" required>{% for calendar in ha_calendars %}<option value="{{ calendar.entity_id }}">{{ calendar.name }} — {{ calendar.entity_id }}</option>{% endfor %}</select><button type="submit">Publish schedule to HA</button></form>{% endif %}
+          <form method="post" action="/migration/import-legacy-helpers" class="actions"><button class="secondary" type="submit">Import old HA Helpers</button></form>
+        {% else %}
+          <p class="lead">Not configured — and not required. Home Assistant can instead poll the REST endpoints above as external sensors.</p>
+        {% endif %}
+      </section>
+    </aside>
   </div>
+</div>
 </body>
 </html>
