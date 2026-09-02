@@ -21,9 +21,8 @@
     "step": {
       "init": {
         "title": "Configure School Cycle Days",
-        "description": "Change integration-level settings. School dates, cycle labels, restart day, and calendar-generation options are edited through the integration's entities.",
+        "description": "Change the target calendar, holiday region, or optional legacy Local Calendar path. School dates, cycle labels, restart day, and generation options are edited through the integration's native entities.",
         "data": {
-          "name": "Name",
           "calendar_entity": "Calendar",
           "us_state": "US state code",
           "legacy_calendar_storage_path": "Legacy Local Calendar storage path (optional)"
