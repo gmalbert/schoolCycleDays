@@ -21,10 +21,18 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8088
 
-    # Optional Home Assistant adapter. Neither value is required for startup.
+    # Optional direct Home Assistant adapter. Neither value is required.
     ha_url: str = ""
     ha_token: str = ""
     verify_ssl: bool = True
+
+    # Optional MQTT/Home Assistant Discovery adapter.
+    mqtt_host: str = ""
+    mqtt_port: int = 1883
+    mqtt_username: str = ""
+    mqtt_password: str = ""
+    mqtt_discovery_prefix: str = "homeassistant"
+    mqtt_base_topic: str = "school_cycle_days"
 
     @property
     def ha_enabled(self) -> bool:
@@ -33,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def ha_base_url(self) -> str:
         return self.ha_url.strip().rstrip("/")
+
+    @property
+    def mqtt_enabled(self) -> bool:
+        return bool(self.mqtt_host.strip())
 
 
 @lru_cache
