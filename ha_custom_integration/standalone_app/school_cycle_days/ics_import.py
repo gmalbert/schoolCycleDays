@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Iterable
 
 from icalendar import Calendar
 
@@ -119,6 +118,8 @@ def _extract_event_blocks(text: str) -> tuple[list[str], bool]:
             inside = False
 
     if inside and current:
+        if current[-1] and not current[-1].endswith(("\n", "\r")):
+            current[-1] += "\r\n"
         current.append("END:VEVENT\r\n")
         blocks.append("".join(current))
         repaired = True
@@ -137,10 +138,7 @@ def _event_dates(component) -> tuple[date, date]:
         return start_date, start_date + timedelta(days=1)
 
     end_date = _as_date(end_value)
-    if isinstance(start_value, datetime) and isinstance(end_value, datetime):
-        if end_date <= start_date:
-            end_date = start_date + timedelta(days=1)
-    elif end_date <= start_date:
+    if end_date <= start_date:
         end_date = start_date + timedelta(days=1)
     return start_date, end_date
 
