@@ -41,6 +41,7 @@ async def async_setup_entry(
             SchoolCycleDaysButton(entry, ui, "generate", "Generate cycle days", lambda: _generate(manager, ui, replace=False)),
             SchoolCycleDaysButton(entry, ui, "regenerate", "Regenerate selected range", lambda: _generate(manager, ui, replace=True)),
             SchoolCycleDaysButton(entry, ui, "delete_selected_date_events", "Delete generated events on selected date", lambda: manager.async_delete_generated_events(start_date=ui.get(SETTING_ADDED_DATE), end_date=ui.get(SETTING_ADDED_DATE))),
+            SchoolCycleDaysButton(entry, ui, "refresh_calendars", "Refresh calendar list", lambda: _refresh_calendars(manager, ui)),
             SchoolCycleDaysButton(entry, ui, "import_calendar", "Import no-school dates", lambda: _import_calendar(manager, ui)),
             SchoolCycleDaysButton(entry, ui, "export_calendar", "Export selected calendar", lambda: manager.async_export_ics(calendar_name=_selected_calendar(ui))),
         ]
@@ -50,14 +51,7 @@ async def async_setup_entry(
 class SchoolCycleDaysButton(SchoolCycleDaysEntity, ButtonEntity):
     """A user-facing operation button."""
 
-    def __init__(
-        self,
-        entry,
-        ui_state,
-        key: str,
-        name: str,
-        handler: Callable[[], Awaitable[object]],
-    ) -> None:
+    def __init__(self, entry, ui_state, key: str, name: str, handler: Callable[[], Awaitable[object]]) -> None:
         super().__init__(entry, ui_state, key)
         self._attr_name = name
         self._handler = handler
@@ -72,8 +66,7 @@ async def _add_non_school(manager, ui) -> None:
 
 
 async def _remove_non_school(manager, ui) -> None:
-    selected = ui.get(SETTING_SELECTED_NON_SCHOOL_DAY)
-    await manager.async_delete_non_school_day(day=selected)
+    await manager.async_delete_non_school_day(day=ui.get(SETTING_SELECTED_NON_SCHOOL_DAY))
     await ui.async_set(SETTING_SELECTED_NON_SCHOOL_DAY, "")
 
 
@@ -95,6 +88,11 @@ async def _generate(manager, ui, *, replace: bool) -> None:
         await manager.async_clear_and_rerun(**kwargs)
     else:
         await manager.async_create_cycle_days(**kwargs)
+
+
+async def _refresh_calendars(manager, ui) -> None:
+    await ui.async_refresh_calendar_names()
+    await manager.async_refresh_calendar_list()
 
 
 async def _import_calendar(manager, ui) -> None:
