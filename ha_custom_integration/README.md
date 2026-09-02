@@ -1,65 +1,62 @@
 # School Cycle Days — Rewrite / Migration Work
 
-This folder contains the replacement work for the original AppDaemon School Cycle Days application. Nothing under the existing repository `apps/` tree has been overwritten.
+This folder contains the replacement work for the original AppDaemon School Cycle Days application. The existing `apps/` tree has not been overwritten.
 
-## Current architectural decision
+## Final architectural direction
 
-The **preferred implementation is now the standalone application** under:
+The **primary implementation is the standalone application** under:
 
 ```text
 ha_custom_integration/standalone_app/
 ```
 
-It runs independently of Home Assistant and connects remotely using Home Assistant's supported REST and WebSocket APIs.
+It does **not require Home Assistant**.
 
-This is a deliberate change from the earlier HA-native custom-integration prototype.
+The standalone app owns:
 
-### Why the architecture changed
+- its web UI;
+- the authoritative school-cycle schedule;
+- SQLite persistence;
+- school-year configuration;
+- cycle-day labels;
+- non-school/snow days;
+- holiday generation;
+- external `.ics` import/cleanup;
+- a polished built-in month calendar;
+- an ICS subscription feed;
+- a versioned REST API.
 
-The earlier work moved the AppDaemon application into a Home Assistant custom integration so it could use Home Assistant's internal calendar entity API, especially event deletion.
-
-A review of current Home Assistant Core established that an authenticated remote client can now do everything this application needs without executing School Cycle Days code inside HA:
-
-- list calendars with `GET /api/calendars`;
-- retrieve calendar events with `GET /api/calendars/<entity_id>?start=...&end=...`;
-- create calendar events through the normal calendar service REST endpoint;
-- authenticate to `/api/websocket`;
-- delete a calendar event remotely with the built-in WebSocket command `calendar/event/delete`.
-
-That makes a custom HA bridge unnecessary on current Home Assistant.
-
-The result is a much cleaner boundary:
+Home Assistant is now only an optional integration target/consumer.
 
 ```text
-┌────────────────────────────────────────────┐
-│ Standalone School Cycle Days               │
-│                                            │
-│ FastAPI web UI                             │
-│ cycle-day engine                           │
-│ SQLite settings/data                       │
-│ holidays                                   │
-│ non-school days                            │
-│ external ICS cleanup/import                │
-│ selective regeneration                    │
-└──────────────────────┬─────────────────────┘
-                       │
-              REST + WebSocket
-                       │
-                       ▼
-┌────────────────────────────────────────────┐
-│ Home Assistant                             │
-│                                            │
-│ authentication                             │
-│ calendar entities/providers                │
-│ calendar event create/delete               │
-└────────────────────────────────────────────┘
+                 +-----------------------------+
+                 | School Cycle Days           |
+                 |                             |
+Browser -------->| standalone calendar UI      |
+                 | SQLite schedule             |
+                 | cycle engine                |
+                 | ICS import                  |
+                 +-------------+---------------+
+                               |
+                +--------------+--------------+
+                |              |              |
+                v              v              v
+           /calendar.ics   /api/v1/*      optional MQTT
+                                           Discovery
+                                                |
+                                                v
+                                         Home Assistant
 ```
 
-Home Assistant is an integration target, not the runtime for the application.
+The direct HA REST/WebSocket adapter remains only for legacy migration and optional calendar-copy behavior.
 
 ## Why this is preferable
 
-### Development
+### No HA dependency
+
+Someone can use School Cycle Days without installing or knowing about Home Assistant.
+
+### Better development
 
 Run:
 
@@ -67,55 +64,112 @@ Run:
 uvicorn school_cycle_days.main:app --reload
 ```
 
-and Python changes reload the standalone application automatically.
+Python changes reload the standalone process without restarting Home Assistant.
 
-There is no need to restart Home Assistant after changing School Cycle Days code.
+### Better calendar ownership
 
-### Reliability
+The schedule exists once, in the standalone database.
 
-Restarting or upgrading HA does not restart the School Cycle Days application.
+Consumers subscribe to/read that schedule instead of School Cycle Days creating, finding, deleting, and recreating external calendar records as its primary storage model.
 
-Restarting the School Cycle Days application does not affect Home Assistant.
+### Better distribution path
 
-### UI
+The product can be distributed as a normal self-hosted web application through Docker/GHCR, with Home Assistant as one optional integration among several.
 
-The application has its own purpose-built browser UI. Routine work remains UI-first:
+## Standalone calendar UI
 
-- choose the HA calendar;
-- change school-year dates;
-- edit all five cycle descriptions;
-- choose starting cycle day;
-- add/remove non-school dates;
-- import an arbitrary `.ics` calendar and retain only `No School` events;
-- download a cleaned `.ics` containing only `No School` events;
-- calculate holidays;
-- generate the calendar;
-- selectively regenerate a range;
-- delete generated events on a single day.
+The main page is now a purpose-built calendar with:
 
-Users do not need to edit Python, YAML, Home Assistant Helpers, or `.ics` files for ordinary operation.
+- month navigation;
+- Today summary;
+- Next School Day summary;
+- visual cycle-day cards;
+- No School highlighting;
+- weekend treatment;
+- current-day highlighting;
+- responsive/mobile layout;
+- browser light/dark mode.
 
-### External ICS calendars
+The UI reads directly from the authoritative `schedule_days` SQLite table.
 
-The standalone app carries forward the original `apps/cycleDays/no_school_calendar.py` behavior directly in the UI.
+## External `.ics` import
 
-Upload any `.ics` file from your computer. It does not need to be a Home Assistant calendar.
+The standalone UI carries forward the original `apps/cycleDays/no_school_calendar.py` behavior.
 
-The app:
+Users can upload any `.ics` file. It does not need to come from Home Assistant.
 
-1. scans its `VEVENT` entries;
-2. keeps only events whose `SUMMARY` begins with `No School`;
-3. discards unrelated events;
-4. repairs a trailing VEVENT missing `END:VEVENT`, matching the old utility's recovery behavior;
-5. expands multi-day No School events into each covered calendar date;
-6. deduplicates imported dates;
-7. either imports those dates into SQLite or downloads a cleaned `.ics` file.
+The importer:
 
-See `standalone_app/ICS_IMPORT_GUIDE.md` for the full behavior and test procedure.
+1. extracts `VEVENT` blocks;
+2. keeps events whose `SUMMARY` starts with `No School`;
+3. ignores unrelated events;
+4. repairs a final event missing `END:VEVENT`;
+5. expands multi-day closures into covered dates;
+6. deduplicates dates;
+7. imports them as non-school days or downloads a cleaned `.ics`.
 
-### Persistence
+See:
 
-Application state is stored in SQLite rather than HA Helper entities or AppDaemon-created attributes.
+```text
+standalone_app/ICS_IMPORT_GUIDE.md
+```
+
+## Built-in outputs
+
+### ICS calendar
+
+```text
+GET /calendar.ics
+```
+
+### REST API
+
+```text
+GET /api/v1/health
+GET /api/v1/today
+GET /api/v1/tomorrow
+GET /api/v1/next-school-day
+GET /api/v1/schedule
+```
+
+These are platform-neutral outputs.
+
+## Optional Home Assistant integration
+
+### MQTT Discovery
+
+Preferred when the user already has an MQTT broker.
+
+The app can publish Home Assistant Discovery/state for:
+
+```text
+Today
+Tomorrow
+Next School Day
+```
+
+### REST sensors
+
+HA or another automation platform can poll the `/api/v1/*` endpoints.
+
+### ICS
+
+HA or any compatible calendar client can consume `/calendar.ics`.
+
+### Direct HA adapter
+
+Still available for:
+
+- importing old HA Helper values;
+- optionally publishing a copy to an HA calendar during transition.
+
+It is not authoritative.
+
+See:
+
+```text
+standalone_app/HOME_ASSISTANT_OPTIONAL_INTEGRATION.md
+```
 
 ## Directory layout
 
@@ -124,195 +178,107 @@ ha_custom_integration/
 ├── README.md
 ├── APPDAEMON_COMPATIBILITY_AUDIT.md
 ├── LOCAL_TESTING_GUIDE.md
-├── standalone_app/                 # PRIMARY IMPLEMENTATION
-│   ├── README.md                   # detailed architecture/run documentation
-│   ├── ICS_IMPORT_GUIDE.md         # external .ics cleanup/import behavior
+├── STANDALONE_MIGRATION_GUIDE.md
+├── STANDALONE_TESTING_GUIDE.md
+│
+├── standalone_app/                    # PRIMARY PRODUCT
+│   ├── README.md
+│   ├── PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md
+│   ├── HOME_ASSISTANT_OPTIONAL_INTEGRATION.md
+│   ├── ICS_IMPORT_GUIDE.md
 │   ├── .env.example
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   ├── pyproject.toml
 │   ├── school_cycle_days/
-│   │   ├── __init__.py
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── ha_client.py
 │   │   ├── ics_import.py
 │   │   ├── main.py
+│   │   ├── mqtt_adapter.py
+│   │   ├── schedule.py
 │   │   └── service.py
 │   ├── templates/
 │   │   └── index.html
 │   └── tests/
-│       ├── test_service.py
-│       └── test_ics_import.py
+│       ├── test_ics_import.py
+│       ├── test_schedule.py
+│       └── test_service.py
 │
-├── custom_components/             # EARLIER HA-NATIVE PROTOTYPE
-│   └── school_cycle_days/
-│       └── ...
-│
-└── examples/
-    └── school_cycle_days_dashboard.yml
+└── custom_components/                 # EARLIER HA-NATIVE PROTOTYPE
+    └── school_cycle_days/
 ```
 
-## Documentation
+The earlier custom integration remains for migration/reference until the standalone version is proven, but it is no longer the intended runtime.
 
-Start with:
-
-```text
-standalone_app/README.md
-```
-
-It documents:
-
-- architecture;
-- HA authentication;
-- REST/WebSocket behavior;
-- local Python setup;
-- Docker deployment;
-- hot reload/update behavior;
-- data ownership;
-- event ownership markers;
-- selective deletion;
-- security;
-- testing;
-- relationship to the HA-native prototype.
-
-For external calendar cleanup/import, use:
-
-```text
-standalone_app/ICS_IMPORT_GUIDE.md
-```
-
-It documents the exact `No School` matching rule, malformed-final-event repair, multi-day expansion, duplicate behavior, cleaned-calendar download, and focused tests.
-
-`APPDAEMON_COMPATIBILITY_AUDIT.md` remains useful for comparing the original AppDaemon behavior with the rewrite.
-
-`LOCAL_TESTING_GUIDE.md` documents testing of the earlier HA-native prototype and remains as a reference while the migration is in progress.
-
-## Standalone quick start
-
-From:
-
-```text
-ha_custom_integration/standalone_app/
-```
-
-create `.env`:
+## Quick start
 
 ```bash
-cp .env.example .env
-```
-
-Set at least:
-
-```dotenv
-SCD_HA_URL=http://homeassistant.local:8123
-SCD_HA_TOKEN=<long-lived-access-token>
-```
-
-Create a virtual environment and install:
-
-```bash
+cd ha_custom_integration/standalone_app
 python -m venv .venv
-source .venv/Scripts/activate   # Windows Git Bash
-pip install -e .
-```
-
-Run:
-
-```bash
+source .venv/Scripts/activate
+pip install -e '.[dev]'
+cp .env.example .env
 uvicorn school_cycle_days.main:app --reload --host 0.0.0.0 --port 8088
 ```
 
-Then open:
+Then browse to:
 
 ```text
 http://localhost:8088
 ```
 
-For Docker:
+A pure standalone install needs no HA or MQTT values in `.env`.
+
+## Docker
 
 ```bash
 docker compose up -d --build
 ```
 
-## Home Assistant credential
+Compose defaults all integration variables to blank, so this also works as a standalone deployment.
 
-For this personal/local deployment, create a dedicated Long-Lived Access Token from the Home Assistant user profile.
+## Public-distribution roadmap
 
-The token is supplied only through the environment:
+The application is now structured toward eventual distribution to other users.
 
-```text
-SCD_HA_TOKEN
-```
+Before a general v1.0 release, the major remaining productization work is:
 
-Do not commit the token.
+- first-run onboarding wizard;
+- authentication/security and CSRF protection;
+- integration settings in the UI;
+- backup/restore;
+- database schema migrations;
+- versioned Docker/GHCR releases;
+- stronger CI/release automation;
+- import preview/review;
+- configurable cycle length;
+- broader API and UI tests.
 
-If this application is ever distributed as a general-purpose application to other users, replace the long-lived-token setup with Home Assistant's OAuth authorization flow.
-
-## Selective calendar deletion
-
-The standalone app never needs to delete the entire calendar file.
-
-For regeneration it:
-
-1. requests HA calendar events for the requested range;
-2. identifies events created by School Cycle Days;
-3. gets their `uid` values;
-4. sends `calendar/event/delete` commands over HA's authenticated WebSocket API;
-5. leaves unrelated events untouched;
-6. creates the replacement events.
-
-New events carry:
+See:
 
 ```text
-[school_cycle_days]
+standalone_app/PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md
 ```
 
-in their description.
+for the detailed product/release plan.
 
-The app also recognizes the event naming convention used by the old AppDaemon application so existing cycle-day entries can be migrated selectively.
+## Development validation
 
-## Status of the HA-native prototype
+Run locally:
 
-The earlier implementation under:
-
-```text
-custom_components/school_cycle_days/
+```bash
+python -m compileall school_cycle_days tests
+pytest -q
 ```
 
-is intentionally **not deleted yet**.
+The core schedule/ICS tests are explicitly designed to run without Home Assistant.
 
-It serves as:
+## Architectural invariant
 
-- a behavioral reference;
-- a fallback for testing;
-- documentation of the AppDaemon-to-HA-native migration;
-- possible compatibility code for an older HA release that lacks required remote calendar APIs.
+Going forward, every core feature should satisfy:
 
-It is no longer the preferred deployment architecture.
+> Would this still work for a user who has no Home Assistant installation?
 
-Do not run the standalone application, HA-native prototype, and AppDaemon against the same production calendar simultaneously during testing.
-
-## Next validation target
-
-Test the standalone app against a disposable HA Local Calendar first:
-
-```text
-calendar.school_cycle_test
-```
-
-Verify:
-
-1. HA connection works;
-2. calendars appear in the standalone UI;
-3. external `.ics` cleanup retains only expected `No School` events;
-4. cleaned `.ics` download opens correctly;
-5. ICS import adds only expected non-school dates and ignores duplicates;
-6. short-range generation works;
-7. event UIDs are returned by the HA calendar endpoint;
-8. deleting one generated date works remotely;
-9. selective regeneration preserves unrelated events;
-10. snow-day cycle shifting behaves correctly;
-11. standalone state survives app restart;
-12. HA restart does not lose standalone state;
-13. production calendar is used only after the above passes.
+If not, it belongs in an optional adapter layer.
