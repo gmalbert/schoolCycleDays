@@ -1,0 +1,34 @@
+{
+  "title": "School Cycle Days",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up School Cycle Days",
+        "description": "Choose the Home Assistant calendar and holiday region. Routine school-cycle settings are edited later through native entities in the UI.",
+        "data": {
+          "name": "Name",
+          "calendar_entity": "Calendar",
+          "us_state": "US state code",
+          "legacy_calendar_storage_path": "Legacy Local Calendar storage path (optional)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "School Cycle Days is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure School Cycle Days",
+        "description": "Change integration-level settings. School dates, cycle labels, restart day, and calendar-generation options are edited through the integration's entities.",
+        "data": {
+          "name": "Name",
+          "calendar_entity": "Calendar",
+          "us_state": "US state code",
+          "legacy_calendar_storage_path": "Legacy Local Calendar storage path (optional)"
+        }
+      }
+    }
+  }
+}
