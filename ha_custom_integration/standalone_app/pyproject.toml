@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "school-cycle-days"
 version = "0.2.0"
@@ -21,8 +25,9 @@ dev = [
   "ruff>=0.12,<1.0",
 ]
 
-[tool.uvicorn]
-factory = false
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["school_cycle_days*"]
 
 [tool.ruff]
 line-length = 100
