@@ -27,6 +27,80 @@ class SchoolCycleDaysService:
     def update_settings(self, values: dict[str, Any]) -> None:
         self.database.update_settings(values)
 
+    async def import_legacy_helpers(self) -> dict[str, int]:
+        """Seed standalone state from the historical Home Assistant Helpers.
+
+        The operation is read-only from Home Assistant's perspective: it reads
+        states/attributes over REST and copies useful values into SQLite.
+        """
+        entity_map = {
+            "school_year_start": "input_datetime.cycle_start_day",
+            "school_year_end": "input_datetime.cycle_end_day",
+            "cycle_day_1": "input_text.cycle_day_1",
+            "cycle_day_2": "input_text.cycle_day_2",
+            "cycle_day_3": "input_text.cycle_day_3",
+            "cycle_day_4": "input_text.cycle_day_4",
+            "cycle_day_5": "input_text.cycle_day_5",
+            "starting_cycle_day": "input_number.cycle_day_restart_day",
+            "include_no_school_events": "input_boolean.include_holidays_in_calendar",
+            "include_weekend_events": "input_boolean.include_weekends_in_calendar",
+        }
+        imported_settings: dict[str, Any] = {}
+        for key, entity_id in entity_map.items():
+            try:
+                state = await self.ha.state(entity_id)
+            except Exception:
+                continue
+            raw = state.get("state")
+            if raw in (None, "", "unknown", "unavailable"):
+                continue
+            if key == "starting_cycle_day":
+                imported_settings[key] = max(1, min(5, int(float(raw))))
+            elif key in {"include_no_school_events", "include_weekend_events"}:
+                imported_settings[key] = raw == "on"
+            else:
+                imported_settings[key] = str(raw)
+
+        if imported_settings:
+            self.database.update_settings(imported_settings)
+
+        imported_non_school = 0
+        try:
+            old_days = await self.ha.state("input_text.non_school_days")
+            values = old_days.get("attributes", {}).get("No school days", [])
+            if isinstance(values, str):
+                values = [value.strip() for value in values.split(",") if value.strip()]
+            if isinstance(values, list):
+                for value in values:
+                    iso = self._legacy_date_to_iso(str(value))
+                    if iso:
+                        self.database.add_non_school_day(iso, source="legacy-ha")
+                        imported_non_school += 1
+        except Exception:
+            pass
+
+        imported_holidays: list[tuple[str, str]] = []
+        try:
+            old_holidays = await self.ha.state("input_text.cycle_day_holidays")
+            values = old_holidays.get("attributes", {}).get("Holiday Dates", [])
+            if isinstance(values, str):
+                values = [value.strip() for value in values.split(",") if value.strip()]
+            if isinstance(values, list):
+                for value in values:
+                    iso = self._legacy_date_to_iso(str(value))
+                    if iso:
+                        imported_holidays.append((iso, "Imported legacy holiday"))
+        except Exception:
+            pass
+        if imported_holidays:
+            self.database.replace_holidays(imported_holidays)
+
+        return {
+            "settings": len(imported_settings),
+            "non_school_days": imported_non_school,
+            "holidays": len(imported_holidays),
+        }
+
     def add_non_school_day(self, day: str) -> None:
         parsed = date.fromisoformat(day)
         self.database.add_non_school_day(parsed.isoformat(), source="manual")
@@ -55,7 +129,9 @@ class SchoolCycleDaysService:
     def clear_holidays(self) -> None:
         self.database.clear_holidays()
 
-    async def generate(self, *, start: date | None = None, end: date | None = None) -> dict[str, int]:
+    async def generate(
+        self, *, start: date | None = None, end: date | None = None
+    ) -> dict[str, int]:
         settings = self.settings()
         start = start or self._require_date(settings, "school_year_start")
         end = end or self._require_date(settings, "school_year_end")
@@ -66,7 +142,10 @@ class SchoolCycleDaysService:
         if not calendar:
             raise ValueError("Select a Home Assistant calendar first")
 
-        cycle_days = [str(settings.get(f"cycle_day_{index}") or "").strip() for index in range(1, 6)]
+        cycle_days = [
+            str(settings.get(f"cycle_day_{index}") or "").strip()
+            for index in range(1, 6)
+        ]
         if any(not value for value in cycle_days):
             raise ValueError("All five cycle-day descriptions are required")
 
@@ -117,7 +196,9 @@ class SchoolCycleDaysService:
             current += timedelta(days=1)
         return counts
 
-    async def regenerate(self, *, start: date | None = None, end: date | None = None) -> dict[str, Any]:
+    async def regenerate(
+        self, *, start: date | None = None, end: date | None = None
+    ) -> dict[str, Any]:
         settings = self.settings()
         start = start or self._require_date(settings, "school_year_start")
         end = end or self._require_date(settings, "school_year_end")
@@ -162,7 +243,6 @@ class SchoolCycleDaysService:
         description = str(event.get("description") or "")
         if GENERATED_MARKER in description:
             return True
-        # Compatibility with events written by the original AppDaemon version.
         if summary.startswith("Day ") and "(" in summary and summary.endswith(")"):
             return True
         return summary == "No School" and description in {
@@ -170,6 +250,18 @@ class SchoolCycleDaysService:
             "Weekend",
             "Holiday / Non-School Day",
         }
+
+    @staticmethod
+    def _legacy_date_to_iso(value: str) -> str | None:
+        value = value.strip()
+        if not value or value in {"None", "[]"}:
+            return None
+        for fmt in ("%m/%d/%Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def _require_date(settings: dict[str, Any], key: str) -> date:
