@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>School Cycle Days</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color-scheme: light dark; }
+    body { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+    .card { border: 1px solid #8886; border-radius: 12px; padding: 18px; }
+    label { display: block; margin: 10px 0 4px; font-weight: 600; }
+    input, select, button { width: 100%; box-sizing: border-box; padding: 9px; }
+    button { margin-top: 10px; cursor: pointer; }
+    .inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .check { display: flex; align-items: center; gap: 8px; }
+    .check input { width: auto; }
+    .message { padding: 12px; border: 1px solid #398c; border-radius: 8px; margin-bottom: 15px; }
+    .error { padding: 12px; border: 1px solid #c44; border-radius: 8px; margin-bottom: 15px; }
+    ul { padding-left: 20px; }
+    small { opacity: .75; }
+  </style>
+</head>
+<body>
+  <h1>School Cycle Days</h1>
+  <p>Standalone application connected remotely to <strong>{{ ha_url }}</strong>.</p>
+
+  {% if message %}<div class="message">{{ message }}</div>{% endif %}
+  {% if connection_error %}<div class="error"><strong>Home Assistant connection error:</strong> {{ connection_error }}</div>{% endif %}
+
+  <div class="grid">
+    <section class="card">
+      <h2>School year & cycle</h2>
+      <form method="post" action="/settings">
+        <label>Home Assistant calendar</label>
+        <select name="calendar_entity" required>
+          <option value="">Select a calendar</option>
+          {% for calendar in calendars %}
+          <option value="{{ calendar.entity_id }}" {% if settings.calendar_entity == calendar.entity_id %}selected{% endif %}>{{ calendar.name }} — {{ calendar.entity_id }}</option>
+          {% endfor %}
+        </select>
+
+        <label>US state code for holidays</label>
+        <input name="us_state" value="{{ settings.us_state }}" maxlength="2" required>
+
+        <div class="inline">
+          <div><label>School year start</label><input type="date" name="school_year_start" value="{{ settings.school_year_start }}" required></div>
+          <div><label>School year end</label><input type="date" name="school_year_end" value="{{ settings.school_year_end }}" required></div>
+        </div>
+
+        {% for number in range(1, 6) %}
+        <label>Cycle Day {{ number }}</label>
+        <input name="cycle_day_{{ number }}" value="{{ settings['cycle_day_' ~ number] }}" required>
+        {% endfor %}
+
+        <label>Starting cycle day</label>
+        <input type="number" name="starting_cycle_day" min="1" max="5" value="{{ settings.starting_cycle_day }}">
+
+        <label class="check"><input type="checkbox" name="include_no_school_events" value="true" {% if settings.include_no_school_events %}checked{% endif %}> Create visible “No School” events on blocked weekdays</label>
+        <label class="check"><input type="checkbox" name="include_weekend_events" value="true" {% if settings.include_weekend_events %}checked{% endif %}> Create visible weekend events</label>
+
+        <button type="submit">Save settings</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Non-school days</h2>
+      <form method="post" action="/non-school-days/add">
+        <label>Add non-school day</label>
+        <input type="date" name="day" required>
+        <button type="submit">Add non-school day</button>
+      </form>
+
+      <h3>Stored dates</h3>
+      {% if non_school_days %}
+      <ul>
+        {% for item in non_school_days %}
+        <li>{{ item.day }} ({{ item.source }})
+          <form style="display:inline" method="post" action="/non-school-days/delete">
+            <input type="hidden" name="day" value="{{ item.day }}">
+            <button style="width:auto; display:inline; padding:3px 7px" type="submit">Remove</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p>No manually entered non-school days.</p>{% endif %}
+
+      <form method="post" action="/non-school-days/clear"><button type="submit">Clear manual non-school days</button></form>
+    </section>
+
+    <section class="card">
+      <h2>Holidays</h2>
+      <p>Loads holidays from the configured state for the current school-year range.</p>
+      <form method="post" action="/holidays/load"><button type="submit">Load / refresh holidays</button></form>
+      <form method="post" action="/holidays/clear"><button type="submit">Clear holidays</button></form>
+      {% if holidays %}
+      <ul>{% for item in holidays %}<li>{{ item.day }} — {{ item.name }}</li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Calendar operations</h2>
+      <form method="post" action="/calendar/generate">
+        <button type="submit">Generate configured school year</button>
+      </form>
+      <p><small>Generate does not delete existing events. Use Regenerate when replacing previously-generated School Cycle Days events.</small></p>
+
+      <h3>Regenerate a range</h3>
+      <form method="post" action="/calendar/regenerate">
+        <div class="inline">
+          <div><label>Start</label><input type="date" name="start_date"></div>
+          <div><label>End</label><input type="date" name="end_date"></div>
+        </div>
+        <button type="submit">Delete generated events + regenerate range</button>
+      </form>
+      <p><small>Blank dates use the configured school-year start/end. Unrelated calendar events are preserved.</small></p>
+
+      <h3>Delete generated event(s) on one date</h3>
+      <form method="post" action="/calendar/delete-day">
+        <input type="date" name="day" required>
+        <button type="submit">Delete generated events on this date</button>
+      </form>
+    </section>
+  </div>
+</body>
+</html>
