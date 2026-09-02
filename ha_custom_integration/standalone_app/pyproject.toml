@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "school-cycle-days"
-version = "0.3.0"
-description = "Standalone school cycle calendar with ICS, REST, and optional integrations"
+version = "0.4.0"
+description = "Standalone rotating school calendar with profiles, ICS, PWA, sync, notifications, and optional integrations"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.116,<1.0",
@@ -18,6 +18,7 @@ dependencies = [
   "icalendar>=6.1,<7.0",
   "paho-mqtt>=2.1,<3.0",
   "pydantic-settings>=2.10,<3.0",
+  "itsdangerous>=2.2,<3.0",
 ]
 
 [project.optional-dependencies]
