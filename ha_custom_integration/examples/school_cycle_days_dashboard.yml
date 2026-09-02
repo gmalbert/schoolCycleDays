@@ -1,81 +1,93 @@
 views:
-  - type: sections
-    max_columns: 2
-    icon: mdi:chair-school
-    path: cycle-days
-    title: School Cycle Days
+  - title: School Cycle Days
+    path: school-cycle-days
+    icon: mdi:school
+    type: sections
+    max_columns: 3
     sections:
       - type: grid
+        title: School Year
         cards:
-          - type: markdown
-            title: System Message
-            content: >-
-              {{ states('sensor.school_cycle_days_status') }}
           - type: entities
-            title: Non School Days
+            title: Cycle setup
             entities:
-              - entity: input_datetime.add_non_school_day
-                name: Add Day
-              - entity: input_button.add_non_school_day
-              - type: divider
-              - entity: input_select.non_school_days
-                name: Delete Non-School Day
-              - entity: input_button.delete_non_school_day
-                name: Delete Selected Day
-              - entity: input_button.clear_non_school_days
-                name: Clear All Non School Days
-              - type: divider
-              - entity: input_button.cycle_day_list_holidays
-                name: Add all holidays
-              - entity: input_button.delete_holidays
-                name: Delete all holidays
-              - type: divider
-              - entity: input_button.refresh_calendar_list
-              - entity: input_select.calendar_list
-              - entity: input_button.add_dates_from_other_calendar
+              - entity: date.school_cycle_days_school_year_start
+                name: School year start
+              - entity: date.school_cycle_days_school_year_end
+                name: School year end
+              - entity: number.school_cycle_days_starting_cycle_day
+                name: Starting cycle day
+              - entity: switch.school_cycle_days_include_no_school_weekdays
+                name: Show no-school weekdays on calendar
+              - entity: switch.school_cycle_days_include_weekends
+                name: Show weekends on calendar
           - type: entities
-            title: Cycle Days
+            title: Cycle labels
             entities:
-              - entity: input_datetime.cycle_start_day
-              - entity: input_datetime.cycle_end_day
-              - entity: input_number.cycle_day_restart_day
-              - entity: input_text.cycle_day_1
-              - entity: input_text.cycle_day_2
-              - entity: input_text.cycle_day_3
-              - entity: input_text.cycle_day_4
-              - entity: input_text.cycle_day_5
-              - type: divider
-              - entity: input_boolean.include_holidays_in_calendar
-              - entity: input_boolean.include_weekends_in_calendar
-              - entity: input_button.rerun_calendar_cycle_days
-              - entity: input_button.delete_calendar_events
-              - entity: input_button.delete_and_rerun_calendar_cycle_days
+              - entity: text.school_cycle_days_cycle_day_1
+              - entity: text.school_cycle_days_cycle_day_2
+              - entity: text.school_cycle_days_cycle_day_3
+              - entity: text.school_cycle_days_cycle_day_4
+              - entity: text.school_cycle_days_cycle_day_5
+          - type: entities
+            title: Calendar generation
+            entities:
+              - entity: button.school_cycle_days_generate_cycle_days
+                name: Generate cycle days
+              - entity: button.school_cycle_days_regenerate_selected_range
+                name: Replace generated events in range
+
       - type: grid
+        title: Non-School Days
         cards:
-          - type: markdown
-            title: Current Calendar
-            content: >-
-              # {{ states('input_text.current_calendar') }}
-          - type: markdown
-            title: Non-School Days
-            content: >-
-              #### These days will be added to the holidays.
-
-              {% set days = state_attr('sensor.school_cycle_days_non_school_days', 'No school days') or [] %}
-              {% for item in days %}
-              * {{ item }}
-              {% else %}
-              * No manually entered non-school days.
-              {% endfor %}
-          - type: markdown
+          - type: entities
+            title: Add / remove dates
+            entities:
+              - entity: date.school_cycle_days_non_school_day
+                name: Date
+              - entity: button.school_cycle_days_add_non_school_day
+                name: Add this date
+              - entity: button.school_cycle_days_delete_generated_events_on_selected_date
+                name: Delete generated event on this date
+              - type: divider
+              - entity: select.school_cycle_days_existing_non_school_day
+                name: Existing non-school day
+              - entity: button.school_cycle_days_remove_selected_non_school_day
+                name: Remove selected date
+              - entity: button.school_cycle_days_clear_non_school_days
+                name: Clear all stored non-school days
+          - type: entities
             title: Holidays
+            entities:
+              - entity: button.school_cycle_days_load_holidays
+              - entity: button.school_cycle_days_delete_holidays
+          - type: markdown
+            title: Stored dates
             content: >-
-              #### Holidays will be added to non-school days.
-
-              {% set names = state_attr('sensor.school_cycle_days_holidays', 'Holidays') or [] %}
-              {% for item in names %}
-              * {{ item }}
+              {% set days = state_attr('sensor.school_cycle_days_non_school_days', 'No school days') or [] %}
+              {% if days | length == 0 %}
+              No manually stored non-school days.
               {% else %}
-              * No holidays loaded.
+              {% for item in days %}
+              - {{ item }}
               {% endfor %}
-    cards: []
+              {% endif %}
+
+      - type: grid
+        title: Calendar Tools
+        cards:
+          - type: entities
+            title: Import / export Local Calendar
+            entities:
+              - entity: button.school_cycle_days_refresh_calendar_list
+              - entity: select.school_cycle_days_import_export_calendar
+              - entity: button.school_cycle_days_import_no_school_dates
+              - entity: button.school_cycle_days_export_selected_calendar
+          - type: markdown
+            title: Status
+            content: >-
+              **Status:** {{ states('sensor.school_cycle_days_status') }}
+
+              **Stored non-school days:** {{ states('sensor.school_cycle_days_non_school_days') }}
+
+              **Stored holiday dates:** {{ states('sensor.school_cycle_days_holidays') }}
