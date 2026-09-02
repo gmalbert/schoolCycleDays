@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DEFAULT_CYCLE_DAYS,
@@ -44,7 +45,7 @@ class SchoolCycleDaysUIState:
         self.store: Store[dict[str, Any]] = Store(
             hass, UI_STORAGE_VERSION, f"{DOMAIN}.ui.{entry_id}"
         )
-        today = date.today()
+        today = dt_util.now().date()
         self.values: dict[str, Any] = {
             SETTING_START_DATE: today.isoformat(),
             SETTING_END_DATE: (today + timedelta(days=280)).isoformat(),
@@ -60,10 +61,46 @@ class SchoolCycleDaysUIState:
             },
         }
 
-    async def async_load(self) -> None:
+    async def async_load(self) -> bool:
+        """Load UI state. Return True when native state already existed."""
         stored = await self.store.async_load()
         if isinstance(stored, dict):
             self.values.update(stored)
+            return True
+        return False
+
+    async def async_seed_from_legacy(self, manager: Any) -> None:
+        """Seed first-run native controls from the user's existing HA helpers."""
+        simple = {
+            SETTING_START_DATE: manager.state("start_date"),
+            SETTING_END_DATE: manager.state("end_date"),
+            SETTING_ADDED_DATE: manager.state("added_date"),
+            SETTING_SELECTED_CALENDAR: manager.state("calendar_list"),
+        }
+        for key, value in simple.items():
+            if value:
+                self.values[key] = value
+
+        restart = manager.state("day_number")
+        if restart:
+            try:
+                self.values[SETTING_DAY_NUMBER] = max(1, min(5, int(float(restart))))
+            except ValueError:
+                pass
+
+        for index in range(1, 6):
+            value = manager.state(f"cycle_day_{index}")
+            if value:
+                self.values[f"{SETTING_CYCLE_PREFIX}{index}"] = value
+
+        include_holidays = manager.state("include_holidays_in_calendar")
+        include_weekends = manager.state("include_weekends_in_calendar")
+        if include_holidays:
+            self.values[SETTING_INCLUDE_HOLIDAYS] = include_holidays == "on"
+        if include_weekends:
+            self.values[SETTING_INCLUDE_WEEKENDS] = include_weekends == "on"
+
+        await self.store.async_save(self.values)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.values.get(key, default)
