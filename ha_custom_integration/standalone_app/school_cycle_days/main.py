@@ -43,7 +43,7 @@ async def index(request: Request, message: str = ""):
     connection_error = ""
     try:
         calendars = await ha.calendars()
-    except Exception as exc:  # surface connection trouble in the UI
+    except Exception as exc:
         connection_error = str(exc)
     return templates.TemplateResponse(
         request,
@@ -57,6 +57,17 @@ async def index(request: Request, message: str = ""):
             "connection_error": connection_error,
             "ha_url": runtime.ha_base_url,
         },
+    )
+
+
+@app.post("/migration/import-legacy-helpers")
+async def import_legacy_helpers():
+    result = await service.import_legacy_helpers()
+    return redirect(
+        "Imported legacy HA values: "
+        f"{result['settings']} settings, "
+        f"{result['non_school_days']} non-school dates, "
+        f"{result['holidays']} holiday dates."
     )
 
 
