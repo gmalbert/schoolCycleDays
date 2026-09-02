@@ -36,6 +36,20 @@
     </form>
   </section>
 
+  <section class="card" style="margin-bottom:18px">
+    <h2>Import an external .ics school calendar</h2>
+    <p>Upload any ICS calendar. The app keeps only VEVENT entries whose summary begins with <strong>No School</strong>, matching the original <code>no_school_calendar.py</code> behavior. Other events are discarded. Multi-day No School events become each covered non-school date, and duplicate dates are ignored.</p>
+    <form method="post" action="/ics/process" enctype="multipart/form-data">
+      <label>ICS calendar file</label>
+      <input type="file" name="calendar_file" accept=".ics,text/calendar" required>
+      <div class="inline">
+        <button type="submit" name="mode" value="import">Clean + import No School dates</button>
+        <button type="submit" name="mode" value="download">Download cleaned .ics only</button>
+      </div>
+    </form>
+    <p><small>The uploaded source calendar is never modified. The cleaner also repairs a final VEVENT that is missing END:VEVENT, as the original script did.</small></p>
+  </section>
+
   <div class="grid">
     <section class="card">
       <h2>School year & cycle</h2>
