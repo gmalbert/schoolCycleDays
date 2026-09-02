@@ -1,42 +1,57 @@
 # School Cycle Days — Standalone Application
 
-School Cycle Days is now a **standalone school-cycle calendar application**.
+School Cycle Days is a **standalone rotating school-calendar application**. Home Assistant is optional.
 
-Home Assistant is optional. The app can run completely on its own with:
+The authoritative schedule lives in SQLite and is rendered directly by the application. External calendars, MQTT, Home Assistant, Google Calendar, Outlook and webhooks are integrations around that core; none owns the schedule.
 
-- a polished month calendar;
-- school-year and cycle-day configuration;
-- manual snow/no-school days;
+## v0.4 product capabilities
+
+- polished standalone calendar UI;
+- arbitrary-length rotating schedules (A/B, 5-day, 6-day, etc.);
+- automatic snow/emergency-day cycle shifting;
+- dry-run schedule preview;
+- clickable per-date overrides;
+- recurring closure rules;
+- multiple school/child profiles;
+- aggregate household view;
+- public read-only share links;
+- private tokenized ICS subscription feeds;
+- external `.ics` upload cleanup and selective review/import;
+- scheduled district ICS URL subscriptions with include/exclude matching rules;
 - state holiday generation;
-- `.ics` import/cleanup;
-- automatic schedule recalculation;
-- SQLite persistence;
-- a subscription-ready `.ics` feed;
-- a versioned REST API.
+- conflict/validation warnings;
+- audit history and snapshot-based Undo;
+- optional local authentication;
+- mobile/PWA shell;
+- REST API;
+- MQTT/Home Assistant Discovery;
+- optional direct Home Assistant migration/publishing;
+- diff-based Google Calendar and Microsoft Outlook synchronization;
+- webhook and ntfy notifications;
+- profile JSON export/backup.
 
-Optional integrations include MQTT/Home Assistant Discovery and direct Home Assistant migration/publishing helpers.
+See [`FEATURE_IMPLEMENTATION_MATRIX.md`](FEATURE_IMPLEMENTATION_MATRIX.md) for the feature-by-feature map to routes, storage, tests and known public-release hardening work.
 
-## Core architectural rule
-
-The application must still work when all Home Assistant and MQTT settings are blank.
-
-The authoritative schedule lives in SQLite, not in Home Assistant, Google Calendar, or an external `.ics` file.
+## Core architecture
 
 ```text
-Browser
-   |
-   v
-School Cycle Days
-├── web calendar
-├── cycle engine
-├── SQLite
-├── ICS import
-├── ICS feed
-└── REST API
-     |
-     +-- optional MQTT / Home Assistant Discovery
-     +-- optional direct Home Assistant adapter
+profiles + cycles + closures + holidays + rules + overrides
+                         |
+                         v
+                 ScheduleService
+                         |
+                         v
+                 profile_schedule
+                         |
+       +-----------------+------------------+
+       |                 |                  |
+ standalone UI       ICS / REST       optional adapters
+                                        MQTT / HA /
+                                   Google / Outlook /
+                                  webhook / ntfy
 ```
+
+Home Assistant can be completely absent.
 
 ## Quick start
 
@@ -47,7 +62,7 @@ python -m venv .venv
 source .venv/Scripts/activate   # Windows Git Bash
 pip install -e '.[dev]'
 cp .env.example .env
-uvicorn school_cycle_days.main:app --reload --host 0.0.0.0 --port 8088
+uvicorn school_cycle_days.product_app:app --reload --host 0.0.0.0 --port 8088
 ```
 
 Open:
@@ -56,7 +71,14 @@ Open:
 http://localhost:8088
 ```
 
-No Home Assistant configuration is required.
+Useful product pages:
+
+```text
+/                    default standalone month calendar
+/household           all configured profiles / add another school
+/profile/<id>         full profile calendar and management UI
+/login                first admin setup / login when auth is enabled
+```
 
 ## Docker
 
@@ -64,157 +86,207 @@ No Home Assistant configuration is required.
 docker compose up -d --build
 ```
 
-The application listens on port `8088` and persists its SQLite database under `/data` in the container.
+The application listens on port `8088` and stores SQLite data under `/data` in the container.
 
-## Standalone calendar
-
-The home page is the product's own calendar UI.
-
-It includes:
-
-- month navigation;
-- Today summary;
-- Next School Day summary;
-- cycle day number and label;
-- No School highlighting;
-- weekend styling;
-- current-day highlighting;
-- responsive layout;
-- browser light/dark-mode support.
-
-Saving settings, adding/removing a non-school day, loading holidays, or importing a district calendar recalculates the local schedule automatically.
-
-## Schedule ownership
-
-The generated schedule is stored in:
+Docker now launches:
 
 ```text
-schedule_days
+school_cycle_days.product_app:app
 ```
 
-inside the SQLite database.
+not the earlier compatibility-only `main:app` entry point.
 
-Each date is classified as one of:
+## Multiple profiles and arbitrary cycles
+
+Each school/child is a `calendar_profile`. Every profile owns its own:
+
+- school-year dates;
+- timezone/state;
+- ordered `cycle_definitions`;
+- manually entered and imported no-school days;
+- holidays;
+- per-date overrides;
+- recurring closure rules;
+- generated schedule;
+- external sources;
+- publication mappings;
+- notification targets;
+- audit/snapshot history;
+- share/ICS tokens.
+
+The cycle is not hard-coded to five days. Five entries are only the migration/default starting point.
+
+## Snow days and corrections
+
+From a profile page:
+
+- **Snow / emergency closure** adds the closure and rebuilds the schedule. The missed cycle position moves to the next eligible school day automatically.
+- **Date override** can force a no-school day or force an explicit cycle position/title/note.
+- **Recurring closure** supports weekday rules, optional date ranges, month filters and nth-occurrence filters.
+- **Undo** restores the latest saved snapshot for supported mutation types and rebuilds.
+
+## Dry-run and validation
 
 ```text
-school
-no_school
-weekend
+GET /api/v1/profiles/<profile>/preview
+GET /api/v1/profiles/<profile>/validation
 ```
 
-School days contain:
+Preview calculates candidate rows without replacing `profile_schedule`. Validation reports configuration/override conflicts.
 
-```text
-cycle_day
-label/detail
-```
+## External `.ics` upload
 
-The cycle advances only on actual school days.
-
-## External `.ics` import
-
-Upload any `.ics` school/district calendar from the web UI.
-
-The importer preserves the original project's rule:
+The historical `no_school_calendar.py` behavior is preserved for upload compatibility:
 
 ```text
 SUMMARY starts with "No School"
 ```
 
-Matching events become standalone non-school dates.
+The profile workflow is safer than the old script:
 
-The importer also:
+1. upload the `.ics`;
+2. parse/clean it;
+3. display candidate dates;
+4. select/deselect candidates;
+5. confirm import;
+6. rebuild the profile schedule.
 
-- deduplicates dates;
-- expands multi-day events;
-- repairs a trailing VEVENT missing `END:VEVENT`;
-- skips malformed events rather than aborting the entire import;
-- can download a cleaned `.ics` containing only the matching events.
+The cleaner also repairs a trailing VEVENT missing `END:VEVENT`, expands multi-day events and skips malformed events rather than failing the entire file.
 
 See [`ICS_IMPORT_GUIDE.md`](ICS_IMPORT_GUIDE.md).
 
-## Built-in ICS feed
+## District ICS URL subscriptions
 
-Always available:
+A profile can subscribe to an arbitrary external ICS URL.
+
+Default include phrases:
+
+```text
+No School
+School Closed
+Vacation
+Teacher Workday
+```
+
+Include/exclude lists are editable per source. Enabled sources refresh in a background loop controlled by:
+
+```dotenv
+SCD_SOURCE_REFRESH_SECONDS=21600
+```
+
+Manual refresh, pause/resume and removal controls are also available.
+
+## Built-in calendar feeds
+
+Legacy/default feed:
 
 ```text
 GET /calendar.ics
 ```
 
-This can be used as a subscription/download feed by compatible calendar clients.
+Profile-specific private feed:
 
-School cycle days are always present.
+```text
+GET /calendar/<slug>.ics?token=<profile_ics_token>
+```
 
-Settings control whether the feed also includes:
+A profile can rotate its ICS token at any time, immediately invalidating the old URL.
 
-- No School entries;
-- weekend entries.
+## Public read-only sharing
+
+Each profile has a separate read-only browser token:
+
+```text
+/share/<public_share_token>
+```
+
+This token is independent from the ICS token and can be rotated separately.
+
+## Household view
+
+```text
+GET /household
+```
+
+Shows Today and Next School Day for every configured profile and provides the UI for creating another school/child profile.
 
 ## REST API
 
-### Health
+Stable namespace:
 
 ```text
 GET /api/v1/health
-```
-
-### Today
-
-```text
 GET /api/v1/today
-```
-
-### Tomorrow
-
-```text
 GET /api/v1/tomorrow
-```
-
-### Next school day
-
-```text
 GET /api/v1/next-school-day
-```
-
-### Schedule range
-
-```text
 GET /api/v1/schedule
+GET /api/v1/profiles
+GET /api/v1/profiles/<profile>/preview
+GET /api/v1/profiles/<profile>/validation
+GET /api/v1/profiles/<profile>/export
 ```
 
-Optional range:
+The profile export is a versioned JSON backup containing profile settings, cycle definitions, no-school dates, holidays, overrides, closure rules and schedule rows.
+
+## Google Calendar and Outlook sync
+
+External publishing is **diff based**.
+
+`published_events` stores:
 
 ```text
-/api/v1/schedule?start=2026-09-01&end=2026-09-30
+profile_id
+provider
+local_day
+external_event_id
+content_hash
 ```
 
-Example schedule object:
+`PublicationSyncPlanner` partitions a sync into:
 
-```json
-{
-  "day": "2026-09-08",
-  "kind": "school",
-  "cycle_day": 1,
-  "title": "Day 1",
-  "detail": "Art",
-  "source": "generated"
-}
+```text
+create
+update
+delete
+unchanged
 ```
 
-The `/api/v1/` namespace is intended to become a stable public integration contract.
+Preview a publication diff:
+
+```text
+POST /profile/<profile>/publish/plan
+```
+
+Execution endpoints:
+
+```text
+POST /profile/<profile>/publish/google
+POST /profile/<profile>/publish/outlook
+```
+
+The current UI accepts an already-issued OAuth access token transiently and does **not** store it. For a polished public release, add first-class OAuth authorization callbacks so ordinary users never paste access tokens.
+
+## Notifications
+
+Current targets:
+
+- generic JSON webhook;
+- ntfy.
+
+The background notification loop checks hourly and sends at most one persisted “tomorrow” reminder per profile/target/day. Payloads include tomorrow and Next School Day data.
 
 ## Optional MQTT / Home Assistant Discovery
 
-Set:
+Configure:
 
 ```dotenv
-SCD_MQTT_HOST=192.168.1.10
+SCD_MQTT_HOST=
 SCD_MQTT_PORT=1883
 SCD_MQTT_USERNAME=
 SCD_MQTT_PASSWORD=
 ```
 
-When enabled, schedule rebuilds publish retained Home Assistant Discovery/state for:
+When configured, the app publishes retained discovery/state for:
 
 ```text
 Today
@@ -222,28 +294,53 @@ Tomorrow
 Next School Day
 ```
 
-MQTT failures are intentionally isolated from the core application. A broker outage cannot prevent schedule generation or use of the standalone calendar.
+MQTT failures are isolated from the local calendar.
 
 See [`HOME_ASSISTANT_OPTIONAL_INTEGRATION.md`](HOME_ASSISTANT_OPTIONAL_INTEGRATION.md).
 
 ## Optional direct Home Assistant adapter
 
-For legacy migration or direct HA-calendar publishing only:
+For legacy migration or optional HA-calendar publication:
 
 ```dotenv
 SCD_HA_URL=http://homeassistant.local:8123
 SCD_HA_TOKEN=<long-lived-access-token>
 ```
 
-This enables:
+This can:
 
-- one-click import of the old HA Helpers;
-- discovery of HA calendars;
-- optional publication of a copy of the cycle schedule into an HA calendar.
+- import values from the original HA Helpers;
+- discover HA calendars;
+- publish a copy into an HA calendar.
 
 Home Assistant remains non-authoritative.
 
-## Environment file
+## Local authentication
+
+Default is LAN-friendly/no-login:
+
+```dotenv
+SCD_REQUIRE_LOGIN=false
+```
+
+For protected management routes:
+
+```dotenv
+SCD_REQUIRE_LOGIN=true
+SCD_SESSION_SECRET=<long-random-secret>
+```
+
+When no user exists, `/login` shows first-admin creation. Passwords are PBKDF2-SHA256 hashed and sessions are signed.
+
+Before exposing a general release directly to the Internet, complete the hardening items in `PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md`, especially CSRF protection, HTTPS-only cookies, throttling/account recovery and OAuth UX.
+
+## PWA/mobile
+
+Responsive pages, `/manifest.webmanifest` and `/service-worker.js` provide an installable web-app baseline with cached GET fallback for previously viewed pages.
+
+Before store-quality distribution, add final icon assets, richer offline/update messaging and a formal accessibility audit.
+
+## Environment
 
 Minimal standalone `.env`:
 
@@ -253,91 +350,83 @@ SCD_HOST=0.0.0.0
 SCD_PORT=8088
 ```
 
-Everything else is optional.
+Optional product settings:
 
-See `.env.example` for integration settings.
+```dotenv
+SCD_REQUIRE_LOGIN=false
+SCD_SESSION_SECRET=
+SCD_SOURCE_REFRESH_SECONDS=21600
+```
+
+See `.env.example` for HA/MQTT settings.
 
 ## Project layout
 
 ```text
 standalone_app/
-├── .env.example
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml
 ├── README.md
+├── FEATURE_IMPLEMENTATION_MATRIX.md
 ├── ICS_IMPORT_GUIDE.md
 ├── HOME_ASSISTANT_OPTIONAL_INTEGRATION.md
 ├── PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md
+├── Dockerfile
+├── docker-compose.yml
+├── pyproject.toml
 ├── school_cycle_days/
-│   ├── __init__.py
+│   ├── adapters.py
 │   ├── config.py
 │   ├── database.py
 │   ├── ha_client.py
 │   ├── ics_import.py
-│   ├── main.py
+│   ├── main.py                    # compatibility/default UI layer
+│   ├── management_routes.py
 │   ├── mqtt_adapter.py
+│   ├── notifications.py
+│   ├── product_app.py             # DISTRIBUTABLE ENTRY POINT
+│   ├── product_routes.py
+│   ├── publisher_routes.py
+│   ├── review_routes.py
 │   ├── schedule.py
-│   └── service.py
+│   ├── security_routes.py
+│   ├── service.py
+│   └── sync_engine.py
 ├── templates/
-│   └── index.html
+│   ├── index.html
+│   ├── profile.html
+│   ├── household.html
+│   ├── shared.html
+│   ├── login.html
+│   └── ics_review.html
 └── tests/
     ├── test_ics_import.py
     ├── test_schedule.py
-    └── test_service.py
+    ├── test_service.py
+    └── test_product_features.py
 ```
 
-## Development reload behavior
-
-Run:
+## Development
 
 ```bash
-uvicorn school_cycle_days.main:app --reload
+uvicorn school_cycle_days.product_app:app --reload --host 0.0.0.0 --port 8088
 ```
 
-Python changes restart the standalone application automatically.
-
-Home Assistant does not need to restart.
-
-HTML template changes generally require only a browser refresh.
-
-Environment-variable changes require restarting the standalone process.
+Python changes reload the standalone process. Home Assistant does not restart.
 
 ## Tests
+
+Before merging or moving this into a new repository:
 
 ```bash
 python -m compileall school_cycle_days tests
 pytest -q
 ```
 
-The core schedule and ICS-import tests are designed to run without Home Assistant.
+Then follow `../STANDALONE_TESTING_GUIDE.md` for end-to-end validation.
 
-## Public distribution direction
+## Distribution direction
 
-The target is a distributable self-hosted application, not a personal HA script.
+The project is now structured to become its own repository. Keep this core rule when extracting it:
 
-Before a general v1.0 release, the major remaining productization items are:
+> **School Cycle Days is a standalone school-calendar product with optional integrations.**
 
-- first-run onboarding wizard;
-- authentication / Internet-exposure security;
-- CSRF protection;
-- integration-settings UI;
-- backup/restore;
-- database schema migrations;
-- automated Docker release pipeline;
-- versioned release artifacts;
-- broader integration/API tests;
-- configurable cycle length;
-- import preview/review UI.
-
-See [`PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md`](PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md) for the detailed roadmap and release criteria.
-
-## Current migration status
-
-The earlier Home Assistant-native custom integration remains in the parent branch/folder as a migration/reference implementation while the standalone application is proven.
-
-It is no longer the preferred runtime.
-
-The long-term identity is:
-
-> **School Cycle Days is a standalone school-calendar application with optional integrations.**
+The remaining work for a polished public v1.0 is predominantly release/security/UX hardening rather than core scheduling capability. See [`PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md`](PRODUCT_ARCHITECTURE_AND_DISTRIBUTION.md).
