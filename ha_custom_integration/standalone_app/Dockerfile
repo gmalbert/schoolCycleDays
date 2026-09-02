@@ -6,9 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml ./
+COPY school_cycle_days ./school_cycle_days
 RUN pip install --no-cache-dir .
 
-COPY school_cycle_days ./school_cycle_days
 COPY templates ./templates
 
 RUN mkdir -p /data
