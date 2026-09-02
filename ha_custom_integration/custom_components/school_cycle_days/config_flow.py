@@ -16,6 +16,7 @@ from .const import (
     CONF_ENTITIES,
     CONF_LEGACY_CALENDAR_STORAGE_PATH,
     CONF_US_STATE,
+    DEFAULT_CALENDAR_ENTITY,
     DEFAULT_NAME,
     DEFAULT_US_STATE,
     DOMAIN,
@@ -31,7 +32,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ): str,
             vol.Required(
                 CONF_CALENDAR_ENTITY,
-                default=defaults.get(CONF_CALENDAR_ENTITY),
+                default=defaults.get(CONF_CALENDAR_ENTITY, DEFAULT_CALENDAR_ENTITY),
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="calendar")
             ),
@@ -65,7 +66,7 @@ class SchoolCycleDaysConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user", data_schema=_schema())
 
     async def async_step_import(self, import_data: dict[str, Any]):
-        """Import the transitional YAML configuration without losing helper maps."""
+        """Import transitional YAML configuration without losing helper maps."""
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
         data = {
@@ -89,7 +90,7 @@ class SchoolCycleDaysConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SchoolCycleDaysOptionsFlow(config_entries.OptionsFlow):
-    """Allow routine integration-level settings to be changed in the UI."""
+    """Allow integration-level settings to be changed in the UI."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
