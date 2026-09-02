@@ -12,19 +12,24 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
 import holidays
 from icalendar import Calendar
 
+from homeassistant.components.calendar import CalendarEntityFeature
+from homeassistant.components.calendar.const import DATA_COMPONENT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
+
+GENERATED_DESCRIPTION_MARKER = "school_cycle_days"
 
 
 class SchoolCycleDaysManager:
@@ -54,7 +59,6 @@ class SchoolCycleDaysManager:
         }
 
     async def async_initialize(self) -> None:
-        """Load persisted data and initialize compatibility helpers."""
         stored = await self.store.async_load()
         if isinstance(stored, dict):
             self.data.update(stored)
@@ -67,7 +71,6 @@ class SchoolCycleDaysManager:
         await self._async_message("School Cycle Days is ready.")
 
     def state(self, key: str, default: str = "") -> str:
-        """Return a configured helper state, if that helper exists."""
         entity_id = self.entities.get(key)
         if not entity_id:
             return default
@@ -77,7 +80,6 @@ class SchoolCycleDaysManager:
         return state.state
 
     async def async_handle_button(self, action: str) -> None:
-        """Dispatch an optional legacy input_button."""
         handlers = {
             "rerun": self.async_create_cycle_days,
             "list_holidays": self.async_load_holidays,
@@ -102,11 +104,6 @@ class SchoolCycleDaysManager:
             await self._async_message(f"School Cycle Days action failed: {action}")
 
     async def async_add_non_school_day(self, day: str | None = None) -> None:
-        """Add one non-school day.
-
-        ``day`` is YYYY-MM-DD or MM/DD/YYYY. If omitted, fall back to the
-        historical input_datetime.add_non_school_day helper.
-        """
         raw = day or self.state("added_date")
         formatted = self._normalize_date(raw)
         if not formatted:
@@ -122,7 +119,6 @@ class SchoolCycleDaysManager:
         await self._async_message(f"{formatted} added as a non-school day.")
 
     async def async_delete_non_school_day(self, day: str | None = None) -> None:
-        """Delete one stored non-school day."""
         selected = self._normalize_date(day) if day else self.state("non_school_days_dropdown")
         days = list(self.data.get("non_school_days", []))
         if not selected or selected == "None" or selected not in days:
@@ -139,7 +135,6 @@ class SchoolCycleDaysManager:
         await self._async_message("Non-school days have been deleted.")
 
     async def async_load_holidays(self, start_date: str | None = None) -> None:
-        """Load US holidays for the start year and following calendar year."""
         start_raw = start_date or self.state("start_date")
         normalized = self._date_object(start_raw)
         if normalized is None:
@@ -172,11 +167,6 @@ class SchoolCycleDaysManager:
         include_holidays: bool | None = None,
         include_weekends: bool | None = None,
     ) -> None:
-        """Create cycle-day events.
-
-        Every parameter is optional for backward compatibility. Missing values
-        are read from the original HA helpers.
-        """
         start = self._date_object(start_date or self.state("start_date"))
         end = self._date_object(end_date or self.state("end_date"))
         if start is None or end is None:
@@ -235,6 +225,62 @@ class SchoolCycleDaysManager:
             f"Weekend Days: {weekend_days}."
         )
 
+    async def async_delete_event(self, uid: str) -> None:
+        """Delete exactly one event from the target calendar by UID."""
+        entity = self._calendar_entity()
+        if entity is None:
+            await self._async_message(f"Calendar entity not found: {self.calendar_entity}")
+            return
+        if not entity.supported_features & CalendarEntityFeature.DELETE_EVENT:
+            await self._async_message("The target calendar does not support event deletion.")
+            return
+        await entity.async_delete_event(uid)
+        await self._async_message(f"Deleted calendar event {uid}.")
+
+    async def async_delete_generated_events(
+        self,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> int:
+        """Delete only School Cycle Days events in the requested date range.
+
+        New events carry an explicit marker in their description. For events
+        produced by the historical AppDaemon version, the recognizable Day N
+        summary and No School Holiday/Weekend descriptions are also accepted.
+        """
+        start = self._date_object(start_date or self.state("start_date"))
+        end = self._date_object(end_date or self.state("end_date"))
+        if start is None or end is None:
+            await self._async_message("Set both start and end dates.")
+            return 0
+        if end < start:
+            await self._async_message("End date must not be before start date.")
+            return 0
+
+        entity = self._calendar_entity()
+        if entity is None:
+            await self._async_message(f"Calendar entity not found: {self.calendar_entity}")
+            return 0
+        if not entity.supported_features & CalendarEntityFeature.DELETE_EVENT:
+            await self._async_message("The target calendar does not support event deletion.")
+            return 0
+
+        start_dt = dt_util.start_of_local_day(start)
+        end_dt = dt_util.start_of_local_day(end + timedelta(days=1))
+        events = await entity.async_get_events(self.hass, start_dt, end_dt)
+        deleted = 0
+        for event in events:
+            if not event.uid or not self._is_generated_event(event.summary, event.description):
+                continue
+            await entity.async_delete_event(event.uid, recurrence_id=event.recurrence_id)
+            deleted += 1
+
+        await self._async_message(
+            f"Deleted {deleted} School Cycle Days calendar event{'s' if deleted != 1 else ''}."
+        )
+        return deleted
+
     async def async_add_dates_from_other_calendar(
         self,
         *,
@@ -242,7 +288,6 @@ class SchoolCycleDaysManager:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> None:
-        """Import events containing 'No School' from a local-calendar ICS file."""
         if not self.legacy_calendar_storage_path:
             await self._async_message("Legacy calendar storage path is not configured.")
             return
@@ -276,7 +321,6 @@ class SchoolCycleDaysManager:
         )
 
     async def async_refresh_calendar_list(self) -> None:
-        """Refresh legacy input_select calendar lists if configured/present."""
         if not self.legacy_calendar_storage_path:
             return
         root = Path(self.legacy_calendar_storage_path)
@@ -287,10 +331,10 @@ class SchoolCycleDaysManager:
         await self._async_set_select_options("calendar_list_for_selection", names)
 
     async def async_clear_calendar(self) -> None:
-        """Clear the target Local Calendar using the historical file fallback."""
+        """Legacy destructive fallback: clear the entire target Local Calendar."""
         if not self.legacy_calendar_storage_path:
             await self._async_message(
-                "Calendar clearing requires legacy_calendar_storage_path."
+                "Full calendar clearing requires legacy_calendar_storage_path."
             )
             return
         path = self._calendar_entity_file(self.calendar_entity)
@@ -307,11 +351,13 @@ class SchoolCycleDaysManager:
         await self._async_message("All calendar events have been removed.")
 
     async def async_clear_and_rerun(self, **kwargs: Any) -> None:
-        await self.async_clear_calendar()
+        """Replace only generated School Cycle Days events in the target range."""
+        await self.async_delete_generated_events(
+            start_date=kwargs.get("start_date"), end_date=kwargs.get("end_date")
+        )
         await self.async_create_cycle_days(**kwargs)
 
     async def async_export_ics(self, calendar_name: str | None = None) -> None:
-        """Export one Local Calendar ICS file to /config/www."""
         if not self.legacy_calendar_storage_path:
             await self._async_message("Legacy calendar storage path is not configured.")
             return
@@ -332,6 +378,9 @@ class SchoolCycleDaysManager:
     async def _async_create_calendar_event(
         self, event_date: date, summary: str, description: str
     ) -> None:
+        # The marker lets future reruns identify only events owned by this
+        # integration while keeping the visible description useful.
+        marked_description = f"{description}\n[{GENERATED_DESCRIPTION_MARKER}]"
         await self.hass.services.async_call(
             "calendar",
             "create_event",
@@ -340,17 +389,32 @@ class SchoolCycleDaysManager:
                 "start_date": event_date.isoformat(),
                 "end_date": (event_date + timedelta(days=1)).isoformat(),
                 "summary": summary,
-                "description": description,
+                "description": marked_description,
             },
             blocking=True,
         )
+
+    def _calendar_entity(self) -> Any | None:
+        component = self.hass.data.get(DATA_COMPONENT)
+        if component is None:
+            return None
+        return component.get_entity(self.calendar_entity)
+
+    @staticmethod
+    def _is_generated_event(summary: str, description: str | None) -> bool:
+        description = description or ""
+        if f"[{GENERATED_DESCRIPTION_MARKER}]" in description:
+            return True
+        # Compatibility with events created by the AppDaemon implementation.
+        if summary.startswith("Day ") and "(" in summary and summary.endswith(")"):
+            return True
+        return summary == "No School" and description in {"Holiday", "Weekend"}
 
     async def _async_save_and_publish(self) -> None:
         await self.store.async_save(self.data)
         await self._async_publish_state()
 
     async def _async_publish_state(self) -> None:
-        """Publish read-only compatibility/status sensors and optional select options."""
         non_school_days = list(self.data.get("non_school_days", []))
         holiday_dates = list(self.data.get("holiday_dates", []))
         holiday_names = list(self.data.get("holiday_names", []))
