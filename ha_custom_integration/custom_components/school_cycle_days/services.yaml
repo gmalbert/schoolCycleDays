@@ -1,0 +1,43 @@
+create_cycle_days:
+  name: Create cycle days
+  description: Create school cycle-day events between the configured start and end helper dates.
+
+load_holidays:
+  name: Load holidays
+  description: Load US holidays for the school year using the configured state.
+
+add_non_school_day:
+  name: Add non-school day
+  description: Add the date selected in the configured input_datetime helper.
+
+delete_non_school_day:
+  name: Delete non-school day
+  description: Delete the date selected in the configured non-school-days input_select helper.
+
+clear_non_school_days:
+  name: Clear non-school days
+  description: Remove all manually stored non-school days.
+
+delete_holidays:
+  name: Delete holidays
+  description: Remove all stored holiday dates and names.
+
+add_dates_from_other_calendar:
+  name: Import no-school dates
+  description: Import events containing "No School" from the selected local ICS calendar.
+
+refresh_calendar_list:
+  name: Refresh calendar list
+  description: Refresh configured input_select helpers with locally available ICS calendars.
+
+clear_calendar:
+  name: Clear local calendar
+  description: Clear the target Local Calendar using the legacy local-calendar file fallback.
+
+clear_and_rerun:
+  name: Clear and rerun
+  description: Clear the target Local Calendar and then regenerate all cycle-day events.
+
+export_ics:
+  name: Export ICS
+  description: Copy the selected local ICS calendar to Home Assistant's www directory.
