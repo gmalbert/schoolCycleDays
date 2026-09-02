@@ -67,6 +67,18 @@ def build_management_router(db:Database,schedule:ScheduleService)->APIRouter:
             pid=r[0]; c.execute("UPDATE external_sources SET enabled=? WHERE id=?",(0 if r[1] else 1,source_id))
         return back(pid,"Source toggled")
 
+    @router.post("/profile/{value}/undo")
+    async def enhanced_undo(value:str):
+        p=profile(value)
+        with db._connect() as c:
+            row=c.execute("SELECT payload FROM snapshots WHERE profile_id=? ORDER BY id DESC LIMIT 1",(p["id"],)).fetchone()
+        if not row:return back(p["id"],"No snapshot available")
+        payload=json.loads(row["payload"]); prior=payload.get("profile") or {}
+        if prior:
+            with db._connect() as c:c.execute("UPDATE calendar_profiles SET name=?,slug=?,timezone=?,school_year_start=?,school_year_end=?,starting_cycle_day=?,us_state=? WHERE id=?",(prior.get("name",p["name"]),prior.get("slug",p["slug"]),prior.get("timezone",p["timezone"]),prior.get("school_year_start",p["school_year_start"]),prior.get("school_year_end",p["school_year_end"]),prior.get("starting_cycle_day",p["starting_cycle_day"]),prior.get("us_state",p["us_state"]),p["id"]))
+        if db.undo(p["id"]):schedule.rebuild_profile(p["id"]); return back(p["id"],"Last change undone")
+        return back(p["id"],"No snapshot available")
+
     @router.get("/api/v1/profiles/{value}/export")
     async def export_profile(value:str):
         p=profile(value)
