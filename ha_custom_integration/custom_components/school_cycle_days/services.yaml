@@ -1,18 +1,58 @@
 create_cycle_days:
   name: Create cycle days
-  description: Create school cycle-day events between the configured start and end helper dates.
+  description: Create school cycle-day events. Fields are optional when legacy helpers exist.
+  fields:
+    start_date:
+      name: Start date
+      description: First date to process (YYYY-MM-DD).
+      example: "2026-09-01"
+    end_date:
+      name: End date
+      description: Last date to process (YYYY-MM-DD).
+      example: "2027-06-15"
+    cycle_days:
+      name: Cycle day descriptions
+      description: Exactly five descriptions, one for each cycle day.
+      example: ["Art", "Music", "Library", "PE", "STEM"]
+    day_number:
+      name: Starting cycle day
+      description: Cycle day number to assign to the first eligible school day.
+      example: 1
+    include_holidays:
+      name: Include non-school weekdays
+      description: Add No School events for blocked weekdays.
+      example: false
+    include_weekends:
+      name: Include weekends
+      description: Add No School events for weekend dates.
+      example: false
 
 load_holidays:
   name: Load holidays
   description: Load US holidays for the school year using the configured state.
+  fields:
+    start_date:
+      name: School-year start date
+      description: Optional YYYY-MM-DD date; falls back to the legacy start-date helper.
+      example: "2026-09-01"
 
 add_non_school_day:
   name: Add non-school day
-  description: Add the date selected in the configured input_datetime helper.
+  description: Add a non-school day to integration-owned persistent storage.
+  fields:
+    day:
+      name: Day
+      description: YYYY-MM-DD or MM/DD/YYYY. Falls back to the legacy date helper.
+      example: "2026-10-09"
 
 delete_non_school_day:
   name: Delete non-school day
-  description: Delete the date selected in the configured non-school-days input_select helper.
+  description: Delete a stored non-school day.
+  fields:
+    day:
+      name: Day
+      description: YYYY-MM-DD or MM/DD/YYYY. Falls back to the legacy dropdown.
+      example: "10/09/2026"
 
 clear_non_school_days:
   name: Clear non-school days
@@ -24,20 +64,57 @@ delete_holidays:
 
 add_dates_from_other_calendar:
   name: Import no-school dates
-  description: Import events containing "No School" from the selected local ICS calendar.
+  description: Import events containing "No School" from a local ICS calendar.
+  fields:
+    calendar_name:
+      name: Calendar name
+      description: Friendly local-calendar name. Falls back to the legacy calendar dropdown.
+      example: "School District"
+    start_date:
+      name: Start date
+      description: Optional YYYY-MM-DD lower bound.
+      example: "2026-09-01"
+    end_date:
+      name: End date
+      description: Optional YYYY-MM-DD upper bound.
+      example: "2027-06-15"
 
 refresh_calendar_list:
   name: Refresh calendar list
-  description: Refresh configured input_select helpers with locally available ICS calendars.
+  description: Refresh legacy input_select helpers, if they exist, with local ICS calendars.
 
 clear_calendar:
   name: Clear local calendar
-  description: Clear the target Local Calendar using the legacy local-calendar file fallback.
+  description: Clear the target Local Calendar using the local-calendar file fallback.
 
 clear_and_rerun:
   name: Clear and rerun
-  description: Clear the target Local Calendar and then regenerate all cycle-day events.
+  description: Clear the target Local Calendar and regenerate cycle-day events. Accepts the same fields as Create cycle days.
+  fields:
+    start_date:
+      name: Start date
+      example: "2026-09-01"
+    end_date:
+      name: End date
+      example: "2027-06-15"
+    cycle_days:
+      name: Cycle day descriptions
+      example: ["Art", "Music", "Library", "PE", "STEM"]
+    day_number:
+      name: Starting cycle day
+      example: 1
+    include_holidays:
+      name: Include non-school weekdays
+      example: false
+    include_weekends:
+      name: Include weekends
+      example: false
 
 export_ics:
   name: Export ICS
-  description: Copy the selected local ICS calendar to Home Assistant's www directory.
+  description: Copy a local ICS calendar to Home Assistant's www directory.
+  fields:
+    calendar_name:
+      name: Calendar name
+      description: Friendly calendar name. Falls back to the legacy calendar dropdown.
+      example: "School"
