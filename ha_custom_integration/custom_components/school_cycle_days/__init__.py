@@ -7,34 +7,39 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant import config_entries
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
     BUTTON_ENTITY_KEYS,
+    CONF_BUTTONS,
     CONF_CALENDAR_ENTITY,
     CONF_ENTITIES,
+    CONF_LEGACY_CALENDAR_STORAGE_PATH,
+    CONF_NAME,
     CONF_US_STATE,
     DEFAULT_CALENDAR_ENTITY,
+    DEFAULT_NAME,
     DEFAULT_US_STATE,
     DOMAIN,
     ENTITY_KEYS,
+    PLATFORMS,
 )
 from .manager import SchoolCycleDaysManager
+from .ui_state import SchoolCycleDaysUIState
 
 _LOGGER = logging.getLogger(__name__)
-
-CONF_BUTTONS = "buttons"
-CONF_LEGACY_CALENDAR_STORAGE_PATH = "legacy_calendar_storage_path"
 
 ENTITY_MAP_SCHEMA = vol.Schema({vol.Optional(key): cv.entity_id for key in ENTITY_KEYS})
 BUTTON_MAP_SCHEMA = vol.Schema({vol.Optional(key): cv.entity_id for key in BUTTON_ENTITY_KEYS})
 
 CONFIG_SCHEMA = vol.Schema(
     {
-        DOMAIN: vol.Schema(
+        vol.Optional(DOMAIN): vol.Schema(
             {
+                vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
                 vol.Optional(CONF_CALENDAR_ENTITY, default=DEFAULT_CALENDAR_ENTITY): cv.entity_id,
                 vol.Optional(CONF_US_STATE, default=DEFAULT_US_STATE): cv.string,
                 vol.Optional(CONF_LEGACY_CALENDAR_STORAGE_PATH): cv.string,
@@ -66,8 +71,8 @@ CALENDAR_IMPORT_SCHEMA = vol.Schema(
     }
 )
 CALENDAR_NAME_SCHEMA = vol.Schema({vol.Optional("calendar_name"): cv.string})
-DELETE_UID_SCHEMA = vol.Schema({vol.Required("uid"): cv.string})
-DELETE_GENERATED_SCHEMA = vol.Schema(
+DELETE_EVENT_SCHEMA = vol.Schema({vol.Required("uid"): cv.string})
+DELETE_RANGE_SCHEMA = vol.Schema(
     {
         vol.Optional("start_date"): cv.string,
         vol.Optional("end_date"): cv.string,
@@ -83,8 +88,8 @@ SERVICE_DEFINITIONS: dict[str, tuple[str, vol.Schema | None]] = {
     "delete_holidays": ("async_delete_holidays", None),
     "add_dates_from_other_calendar": ("async_add_dates_from_other_calendar", CALENDAR_IMPORT_SCHEMA),
     "refresh_calendar_list": ("async_refresh_calendar_list", None),
-    "delete_event": ("async_delete_event", DELETE_UID_SCHEMA),
-    "delete_generated_events": ("async_delete_generated_events", DELETE_GENERATED_SCHEMA),
+    "delete_event": ("async_delete_event", DELETE_EVENT_SCHEMA),
+    "delete_generated_events": ("async_delete_generated_events", DELETE_RANGE_SCHEMA),
     "clear_calendar": ("async_clear_calendar", None),
     "clear_and_rerun": ("async_clear_and_rerun", CREATE_SCHEMA),
     "export_ics": ("async_export_ics", CALENDAR_NAME_SCHEMA),
@@ -92,38 +97,82 @@ SERVICE_DEFINITIONS: dict[str, tuple[str, vol.Schema | None]] = {
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Set up School Cycle Days from configuration.yaml."""
+    """Set up YAML migration support.
+
+    YAML is no longer the primary configuration mechanism. If present, it is
+    imported into a normal config entry so subsequent configuration is UI-based.
+    """
+    hass.data.setdefault(DOMAIN, {})
     raw_config = config.get(DOMAIN)
-    if raw_config is None:
-        return True
-
-    # Defaults retain the exact helper ids from the AppDaemon app, but the
-    # manager only uses a helper when a native service call omits that value.
-    entities = {**ENTITY_KEYS, **raw_config.get(CONF_ENTITIES, {})}
-    buttons = {**BUTTON_ENTITY_KEYS, **raw_config.get(CONF_BUTTONS, {})}
-
-    manager = SchoolCycleDaysManager(
-        hass,
-        calendar_entity=raw_config[CONF_CALENDAR_ENTITY],
-        entities=entities,
-        buttons=buttons,
-        us_state=raw_config[CONF_US_STATE],
-        legacy_calendar_storage_path=raw_config.get(CONF_LEGACY_CALENDAR_STORAGE_PATH),
-    )
-    hass.data[DOMAIN] = manager
-
-    await manager.async_initialize()
-    _register_services(hass, manager)
-    _register_button_listeners(hass, manager)
-
-    _LOGGER.info("School Cycle Days custom integration loaded")
+    if raw_config:
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": config_entries.SOURCE_IMPORT},
+                data=dict(raw_config),
+            )
+        )
     return True
 
 
-def _register_services(hass: HomeAssistant, manager: SchoolCycleDaysManager) -> None:
-    """Expose application operations as Home Assistant actions."""
+async def async_setup_entry(hass: HomeAssistant, entry: config_entries.ConfigEntry) -> bool:
+    """Set up School Cycle Days from a UI config entry."""
+    hass.data.setdefault(DOMAIN, {})
+    config = {**entry.data, **entry.options}
+    entities = {**ENTITY_KEYS, **entry.data.get(CONF_ENTITIES, {})}
+    buttons = {**BUTTON_ENTITY_KEYS, **entry.data.get(CONF_BUTTONS, {})}
 
+    manager = SchoolCycleDaysManager(
+        hass,
+        calendar_entity=config[CONF_CALENDAR_ENTITY],
+        entities=entities,
+        buttons=buttons,
+        us_state=config.get(CONF_US_STATE, DEFAULT_US_STATE),
+        legacy_calendar_storage_path=config.get(CONF_LEGACY_CALENDAR_STORAGE_PATH),
+    )
+    ui_state = SchoolCycleDaysUIState(
+        hass,
+        entry.entry_id,
+        legacy_calendar_storage_path=config.get(CONF_LEGACY_CALENDAR_STORAGE_PATH),
+    )
+    await ui_state.async_load()
+    await manager.async_initialize()
+
+    runtime: dict[str, Any] = {"manager": manager, "ui": ui_state, "unsubs": []}
+    hass.data[DOMAIN][entry.entry_id] = runtime
+
+    _register_services(hass, manager)
+    runtime["unsubs"] = _register_button_listeners(hass, manager)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
+    _LOGGER.info("School Cycle Days config entry loaded")
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: config_entries.ConfigEntry) -> bool:
+    """Unload a School Cycle Days config entry."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unloaded:
+        return False
+    runtime = hass.data[DOMAIN].pop(entry.entry_id, {})
+    for unsub in runtime.get("unsubs", []):
+        unsub()
+    for service_name in SERVICE_DEFINITIONS:
+        hass.services.async_remove(DOMAIN, service_name)
+    return True
+
+
+async def _async_entry_updated(hass: HomeAssistant, entry: config_entries.ConfigEntry) -> None:
+    """Apply options changed through Settings > Devices & services > Configure."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _register_services(hass: HomeAssistant, manager: SchoolCycleDaysManager) -> None:
+    """Expose advanced/scriptable operations in addition to native buttons."""
     for service_name, (method_name, schema) in SERVICE_DEFINITIONS.items():
+        if hass.services.has_service(DOMAIN, service_name):
+            continue
 
         async def _handle_service(
             call: ServiceCall,
@@ -143,9 +192,9 @@ def _register_services(hass: HomeAssistant, manager: SchoolCycleDaysManager) -> 
 
 def _register_button_listeners(
     hass: HomeAssistant, manager: SchoolCycleDaysManager
-) -> None:
-    """Listen to the original input_button helpers for drop-in compatibility."""
-
+) -> list[Any]:
+    """Listen to original input_button helpers for drop-in compatibility."""
+    unsubs: list[Any] = []
     for action, entity_id in manager.buttons.items():
         if not entity_id:
             continue
@@ -159,11 +208,10 @@ def _register_button_listeners(
         ) -> None:
             old_state = event.data.get("old_state")
             new_state = event.data.get("new_state")
-            if old_state is None or new_state is None:
+            if old_state is None or new_state is None or old_state.state == new_state.state:
                 return
-            if old_state.state == new_state.state:
-                return
-            _LOGGER.debug("Button %s triggered School Cycle Days action %s", entity_id, action)
+            _LOGGER.debug("Legacy button %s triggered action %s", entity_id, action)
             hass.async_create_task(manager.async_handle_button(action))
 
-        async_track_state_change_event(hass, [entity_id], _button_changed)
+        unsubs.append(async_track_state_change_event(hass, [entity_id], _button_changed))
+    return unsubs
