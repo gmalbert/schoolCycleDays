@@ -6,6 +6,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from .main import app, database, runtime, schedule, templates
+from .management_routes import build_management_router
 from .notifications import notification_loop
 from .product_routes import build_product_router, subscription_refresh_loop
 from .publisher_routes import build_publisher_router
@@ -14,7 +15,7 @@ from .security_routes import build_security_router
 
 app.title="School Cycle Days"; app.version="0.4.0"
 app.add_middleware(SessionMiddleware,secret_key=runtime.session_secret or secrets.token_urlsafe(32),same_site="lax",https_only=False)
-app.include_router(build_product_router(database,schedule,templates)); app.include_router(build_review_router(database,schedule,templates)); app.include_router(build_publisher_router(database,schedule)); app.include_router(build_security_router(database))
+app.include_router(build_product_router(database,schedule,templates)); app.include_router(build_review_router(database,schedule,templates)); app.include_router(build_publisher_router(database,schedule)); app.include_router(build_security_router(database)); app.include_router(build_management_router(database,schedule))
 
 PUBLIC_PREFIXES=("/login","/setup-admin","/share/","/calendar/","/api/v1/health","/manifest.webmanifest","/service-worker.js")
 @app.middleware("http")
