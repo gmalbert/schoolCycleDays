@@ -6,6 +6,8 @@ The design goal is now explicitly **UI-first**: after installation, routine conf
 
 See [`APPDAEMON_COMPATIBILITY_AUDIT.md`](APPDAEMON_COMPATIBILITY_AUDIT.md) for the method-by-method AppDaemon compatibility review.
 
+For installation, local development, restart/reload behavior, and a complete acceptance-test sequence, see [`LOCAL_TESTING_GUIDE.md`](LOCAL_TESTING_GUIDE.md).
+
 ## What this version changes
 
 The original AppDaemon app used manually-created HA Helpers for configuration, commands, display state, and persistence. It also called HA back through REST with a bearer token.
@@ -27,6 +29,7 @@ This version:
 ```text
 ha_custom_integration/
 ├── APPDAEMON_COMPATIBILITY_AUDIT.md
+├── LOCAL_TESTING_GUIDE.md
 ├── hacs.json
 ├── README.md
 ├── examples/
@@ -360,6 +363,8 @@ school_cycle_days.export_ics
 13. Move your dashboard to the native entities.
 14. Disable the AppDaemon app.
 15. Remove obsolete Helpers only after nothing references them.
+
+For the full test matrix, troubleshooting steps, and detailed restart/reload behavior during development, use [`LOCAL_TESTING_GUIDE.md`](LOCAL_TESTING_GUIDE.md).
 
 ## Local vs HACS use
 
