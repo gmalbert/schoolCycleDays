@@ -39,6 +39,7 @@ The result is a much cleaner boundary:
 │ SQLite settings/data                       │
 │ holidays                                   │
 │ non-school days                            │
+│ external ICS cleanup/import                │
 │ selective regeneration                    │
 └──────────────────────┬─────────────────────┘
                        │
@@ -85,12 +86,32 @@ The application has its own purpose-built browser UI. Routine work remains UI-fi
 - edit all five cycle descriptions;
 - choose starting cycle day;
 - add/remove non-school dates;
+- import an arbitrary `.ics` calendar and retain only `No School` events;
+- download a cleaned `.ics` containing only `No School` events;
 - calculate holidays;
 - generate the calendar;
 - selectively regenerate a range;
 - delete generated events on a single day.
 
 Users do not need to edit Python, YAML, Home Assistant Helpers, or `.ics` files for ordinary operation.
+
+### External ICS calendars
+
+The standalone app carries forward the original `apps/cycleDays/no_school_calendar.py` behavior directly in the UI.
+
+Upload any `.ics` file from your computer. It does not need to be a Home Assistant calendar.
+
+The app:
+
+1. scans its `VEVENT` entries;
+2. keeps only events whose `SUMMARY` begins with `No School`;
+3. discards unrelated events;
+4. repairs a trailing VEVENT missing `END:VEVENT`, matching the old utility's recovery behavior;
+5. expands multi-day No School events into each covered calendar date;
+6. deduplicates imported dates;
+7. either imports those dates into SQLite or downloads a cleaned `.ics` file.
+
+See `standalone_app/ICS_IMPORT_GUIDE.md` for the full behavior and test procedure.
 
 ### Persistence
 
@@ -105,6 +126,7 @@ ha_custom_integration/
 ├── LOCAL_TESTING_GUIDE.md
 ├── standalone_app/                 # PRIMARY IMPLEMENTATION
 │   ├── README.md                   # detailed architecture/run documentation
+│   ├── ICS_IMPORT_GUIDE.md         # external .ics cleanup/import behavior
 │   ├── .env.example
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -114,10 +136,14 @@ ha_custom_integration/
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── ha_client.py
+│   │   ├── ics_import.py
 │   │   ├── main.py
 │   │   └── service.py
-│   └── templates/
-│       └── index.html
+│   ├── templates/
+│   │   └── index.html
+│   └── tests/
+│       ├── test_service.py
+│       └── test_ics_import.py
 │
 ├── custom_components/             # EARLIER HA-NATIVE PROTOTYPE
 │   └── school_cycle_days/
@@ -149,6 +175,14 @@ It documents:
 - security;
 - testing;
 - relationship to the HA-native prototype.
+
+For external calendar cleanup/import, use:
+
+```text
+standalone_app/ICS_IMPORT_GUIDE.md
+```
+
+It documents the exact `No School` matching rule, malformed-final-event repair, multi-day expansion, duplicate behavior, cleaned-calendar download, and focused tests.
 
 `APPDAEMON_COMPATIBILITY_AUDIT.md` remains useful for comparing the original AppDaemon behavior with the rewrite.
 
@@ -271,11 +305,14 @@ Verify:
 
 1. HA connection works;
 2. calendars appear in the standalone UI;
-3. short-range generation works;
-4. event UIDs are returned by the HA calendar endpoint;
-5. deleting one generated date works remotely;
-6. selective regeneration preserves unrelated events;
-7. snow-day cycle shifting behaves correctly;
-8. standalone state survives app restart;
-9. HA restart does not lose standalone state;
-10. production calendar is used only after the above passes.
+3. external `.ics` cleanup retains only expected `No School` events;
+4. cleaned `.ics` download opens correctly;
+5. ICS import adds only expected non-school dates and ignores duplicates;
+6. short-range generation works;
+7. event UIDs are returned by the HA calendar endpoint;
+8. deleting one generated date works remotely;
+9. selective regeneration preserves unrelated events;
+10. snow-day cycle shifting behaves correctly;
+11. standalone state survives app restart;
+12. HA restart does not lose standalone state;
+13. production calendar is used only after the above passes.
