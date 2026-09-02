@@ -51,7 +51,7 @@ def clean_no_school_calendar(raw: bytes) -> NoSchoolImportResult:
     This intentionally preserves the original helper script's matching rule,
     while accepting case differences and malformed files whose final VEVENT is
     missing END:VEVENT. The returned ICS is a fresh, valid calendar containing
-    only matching events.
+    only matching, parseable events.
     """
     text = raw.decode("utf-8-sig", errors="replace")
     event_blocks, repaired = _extract_event_blocks(text)
@@ -77,7 +77,10 @@ def clean_no_school_calendar(raw: bytes) -> NoSchoolImportResult:
             summary = str(component.get("summary", "")).strip()
             if not summary.lower().startswith("no school"):
                 continue
-            start, end = _event_dates(component)
+            try:
+                start, end = _event_dates(component)
+            except Exception:
+                continue
             output.add_component(component)
             matching.append(
                 NoSchoolEvent(
