@@ -51,6 +51,10 @@ class HomeAssistantClient:
     async def config(self) -> dict[str, Any]:
         return await self._get_json("/api/config")
 
+    async def state(self, entity_id: str) -> dict[str, Any]:
+        encoded = quote(entity_id, safe=".")
+        return await self._get_json(f"/api/states/{encoded}")
+
     async def calendars(self) -> list[dict[str, str]]:
         return await self._get_json("/api/calendars")
 
