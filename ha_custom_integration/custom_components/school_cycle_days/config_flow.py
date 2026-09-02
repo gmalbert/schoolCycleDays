@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
@@ -73,15 +74,13 @@ class SchoolCycleDaysConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(title=data[CONF_NAME], data=data)
 
     @staticmethod
+    @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return SchoolCycleDaysOptionsFlow(config_entry)
+        return SchoolCycleDaysOptionsFlow()
 
 
 class SchoolCycleDaysOptionsFlow(config_entries.OptionsFlow):
     """Allow integration-level settings to be changed in the UI."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         current = {**self.config_entry.data, **self.config_entry.options}
